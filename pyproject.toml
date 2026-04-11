@@ -1,0 +1,79 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ecoalign-forge"
+version = "0.2.0"
+description = "Multi-Agent framework for content moderation & alignment (RLHF/DPO) data synthesis."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [{ name = "EcoAlign-Forge Contributors" }]
+keywords = ["llm", "rlhf", "dpo", "content-moderation", "alignment", "red-teaming", "multi-agent"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "litellm>=1.50.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "orjson>=3.9.0",
+    "rich>=13.0.0",
+    "tenacity>=8.2.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dashboard = [
+    "streamlit>=1.38.0",
+    "plotly>=5.22.0",
+    "streamlit-autorefresh>=1.0.1",
+    "pandas>=2.1.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.5.0",
+]
+all = ["ecoalign-forge[dashboard,dev]"]
+
+[project.scripts]
+ecoalign-forge = "ecoalign_forge.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ecoalign_forge"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",
+    "RUF001",  # 允许中文字符（全角逗号等）
+    "RUF002",  # 允许 docstring 中的中文字符
+    "RUF003",  # 允许注释中的中文字符
+    "N801",    # DPO_Pair 命名保持不变
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ecoalign_forge"]
+
+[tool.ruff.lint.per-file-ignores]
+"dashboard/app.py" = ["E402"]  # Streamlit 要求 set_page_config 在最前面
+"dashboard/data_loader.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"

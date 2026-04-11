@@ -1,0 +1,17 @@
+{
+    "policy_id": "social-media-v2",
+    "name": "社交媒体社区内容分级",
+    "version": "2.0",
+    "language": "zh",
+    "dimensions": [
+        {
+            "name": "stealth_marketing",
+            "description": "软广植入和隐蔽导流：评论区暗号、私域引流话术、伪装种草笔记"
+        },
+        {
+            "name": "ai_slop",
+            "description": "低质量 AI 生成内容：模板化洗稿、语义空洞列表体、缺乏真实体验"
+        }
+    ],
+    "context": "社交媒体平台用户生成内容审核，重点打击灰黑产引流和 AI 水军"
+}

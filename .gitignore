@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 虚拟环境
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 环境变量（保留示例文件）
+.env
+!.env.example
+
+# 数据输出
+data/
+*.jsonl
+
+# macOS
+.DS_Store
+
+# 非项目文件（博客/推广素材保留在本地）
+docs/blog*
+docs/promotion*
+
+# 测试与缓存
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/

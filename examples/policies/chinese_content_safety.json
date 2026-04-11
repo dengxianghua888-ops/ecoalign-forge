@@ -1,0 +1,17 @@
+{
+    "policy_id": "chinese-content-safety-v2",
+    "name": "内容分发分级平台审核策略",
+    "version": "2.0",
+    "language": "zh",
+    "dimensions": [
+        {
+            "name": "stealth_marketing",
+            "description": "高隐蔽性私域引流：微信号、谐音字、emoji 夹带、暗号话术、二维码、评论区接力"
+        },
+        {
+            "name": "ai_slop",
+            "description": "低信息熵 AI 洗稿：套话开篇、语义重复、缺第一手细节、高度雷同、稀薄列表"
+        }
+    ],
+    "context": "适用于中文 UGC 平台（小红书/知乎/B站/微博等），按 T0_Block / T1_Shadowban / T2_Normal / T3_Recommend 四档分级"
+}
