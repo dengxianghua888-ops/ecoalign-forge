@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoAlign-Forge Demo Dataset — 质量报告</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #1f2329; line-height: 1.6; padding: 24px; }
+.container { max-width: 1100px; margin: 0 auto; }
+h1 { font-size: 28px; margin-bottom: 8px; }
+.subtitle { color: #646a73; font-size: 14px; margin-bottom: 32px; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+.kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.kpi-value { font-size: 32px; font-weight: 700; color: #5178c6; }
+.kpi-label { font-size: 13px; color: #646a73; margin-top: 4px; }
+.section { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.section h2 { font-size: 18px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #f0f4fc; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { background: #f0f4fc; text-align: left; padding: 10px 12px; font-weight: 600; }
+td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
+tr:hover td { background: #fafbfc; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+.badge-green { background: #dff5e5; color: #509863; }
+.badge-yellow { background: #fef1ce; color: #d4b45b; }
+.badge-red { background: #fee3e2; color: #d25d5a; }
+.badge-blue { background: #f0f4fc; color: #5178c6; }
+.progress-bar { width: 100%; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.chart-container { text-align: center; padding: 16px 0; }
+.footer { text-align: center; color: #999; font-size: 12px; margin-top: 32px; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>EcoAlign-Forge Demo Dataset</h1>
+<p class="subtitle">数据质量报告 · 生成时间 2026-04-11 08:15 UTC · by EcoAlign-Forge</p>
+
+<div class="kpi-grid">
+<div class="kpi-card"><div class="kpi-value">347</div><div class="kpi-label">DPO 偏好对总数</div></div>
+<div class="kpi-card"><div class="kpi-value">0.78</div><div class="kpi-label">平均质量分</div></div>
+<div class="kpi-card"><div class="kpi-value">0.62</div><div class="kpi-label">平均偏好差距</div></div>
+<div class="kpi-card"><div class="kpi-value">42.0%</div><div class="kpi-label">拦截率 (T0+T1)</div></div>
+</div>
+
+<div class="section">
+<h2>决策分布</h2>
+<table><tr><th>档位</th><th>数量</th><th>占比</th><th>分布</th></tr><tr>
+<td><span class="badge badge-red">T0_Block</span></td>
+<td>58</td>
+<td>16.7%</td>
+<td><div class="progress-bar"><div class="progress-fill" style="width:16.714697406340058%;background:#d25d5a"></div></div></td>
+</tr><tr>
+<td><span class="badge badge-yellow">T1_Shadowban</span></td>
+<td>89</td>
+<td>25.6%</td>
+<td><div class="progress-bar"><div class="progress-fill" style="width:25.64841498559078%;background:#d4b45b"></div></div></td>
+</tr><tr>
+<td><span class="badge badge-blue">T2_Normal</span></td>
+<td>128</td>
+<td>36.9%</td>
+<td><div class="progress-bar"><div class="progress-fill" style="width:36.887608069164266%;background:#5178c6"></div></div></td>
+</tr><tr>
+<td><span class="badge badge-green">T3_Recommend</span></td>
+<td>72</td>
+<td>20.7%</td>
+<td><div class="progress-bar"><div class="progress-fill" style="width:20.7492795389049%;background:#509863"></div></div></td>
+</tr></table>
+</div>
+
+<div class="section">
+<h2>质量分数分布</h2>
+<div class="chart-container">
+<svg width="400" height="180" viewBox="0 0 400 180"><rect x="30" y="150.0" width="60" height="0.0" fill="#d25d5a" rx="4"/><text x="60.0" y="145.0" text-anchor="middle" font-size="12" fill="#333">0</text><text x="60.0" y="170" text-anchor="middle" font-size="11" fill="#999">0-0.2</text><rect x="102" y="137.0" width="60" height="13.0" fill="#d4b45b" rx="4"/><text x="132.0" y="132.0" text-anchor="middle" font-size="12" fill="#333">1</text><text x="132.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.2-0.4</text><rect x="174" y="111.0" width="60" height="39.0" fill="#5178c6" rx="4"/><text x="204.0" y="106.0" text-anchor="middle" font-size="12" fill="#333">3</text><text x="204.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.4-0.6</text><rect x="246" y="20.0" width="60" height="130.0" fill="#509863" rx="4"/><text x="276.0" y="15.0" text-anchor="middle" font-size="12" fill="#333">10</text><text x="276.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.6-0.8</text><rect x="318" y="72.0" width="60" height="78.0" fill="#509863" rx="4"/><text x="348.0" y="67.0" text-anchor="middle" font-size="12" fill="#333">6</text><text x="348.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.8-1.0</text></svg>
+</div>
+</div>
+
+<div class="section">
+<h2>维度拦截率</h2>
+<table><tr><th>维度</th><th>总数</th><th>拦截数</th><th>拦截率</th></tr><tr>
+<td>stealth_marketing</td>
+<td>180</td>
+<td>98</td>
+<td><span class="badge badge-yellow">54.4%</span></td>
+</tr><tr>
+<td>ai_slop</td>
+<td>167</td>
+<td>49</td>
+<td><span class="badge badge-green">29.3%</span></td>
+</tr></table>
+</div>
+
+<div class="section">
+<h2>规则覆盖率</h2>
+<p>覆盖率: <strong>12/12 (100%)</strong></p>
+<table><tr><th>规则编号</th><th>命中次数</th><th>状态</th></tr><tr><td>A-001</td><td>45</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>A-002</td><td>38</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>A-003</td><td>22</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>A-004</td><td>15</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>A-005</td><td>8</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>A-006</td><td>12</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-001</td><td>67</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-002</td><td>34</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-003</td><td>28</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-004</td><td>19</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-005</td><td>41</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-006</td><td>5</td><td><span class="badge badge-green">已覆盖</span></td></tr></table>
+</div>
+
+<div class="section">
+<h2>标注者一致性 (IAA)</h2>
+<div class="kpi-grid">
+<div class="kpi-card"><div class="kpi-value" style="color:#509863">0.640</div><div class="kpi-label">Cohen's Kappa (平均)</div></div>
+<div class="kpi-card"><div class="kpi-value" style="color:#d4b45b">0.580</div><div class="kpi-label">Krippendorff's Alpha</div></div>
+<div class="kpi-card"><div class="kpi-value">✅ 高</div><div class="kpi-label">置信度</div></div>
+</div>
+</div>
+<div class="section">
+<h2>数据飞轮迭代</h2>
+<div class="kpi-grid">
+<div class="kpi-card"><div class="kpi-value">4</div><div class="kpi-label">迭代轮次</div></div>
+<div class="kpi-card"><div class="kpi-value">1247</div><div class="kpi-label">累计 DPO 对</div></div>
+<div class="kpi-card"><div class="kpi-value">+50.0%</div><div class="kpi-label">质量提升</div></div>
+</div>
+<div class="chart-container">
+<svg width="500" height="150" viewBox="0 0 500 150">
+<polyline points="40.0,56.66666666666667 186.66666666666666,43.97435897435898 333.3333333333333,28.461538461538467 480.0,20.0" fill="none" stroke="#5178c6" stroke-width="2"/>
+<circle cx="40.0" cy="56.66666666666667" r="4" fill="#5178c6"/><circle cx="186.66666666666666" cy="43.97435897435898" r="4" fill="#5178c6"/><circle cx="333.3333333333333" cy="28.461538461538467" r="4" fill="#5178c6"/><circle cx="480.0" cy="20.0" r="4" fill="#5178c6"/>
+<text x="20" y="145" font-size="11" fill="#999">Round 1</text>
+<text x="440" y="145" font-size="11" fill="#999">Round 4</text>
+</svg>
+<p style="color:#646a73;font-size:13px">质量趋势（每轮平均质量分）</p>
+</div>
+</div>
+
+<p class="footer">Generated by EcoAlign-Forge · Multi-Agent DPO Data Synthesis Factory</p>
+</div>
+</body>
+</html>
