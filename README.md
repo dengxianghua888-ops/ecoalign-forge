@@ -1,141 +1,90 @@
 # EcoAlign-Forge
 
-An experimental Python pipeline for Chinese content moderation preference data, with rule citations and provenance.
+An experimental, resumable synthesis kernel for rule-based machine preference data.
 
-[中文](README_zh.md) · [Migration](docs/iteration-a-migration.md) · [Acceptance status](docs/iteration-a-acceptance.md) · [Changelog](CHANGELOG.md)
+[中文](README_zh.md) · [Migration and contracts](docs/iteration-b-migration.md) · [Acceptance](docs/iteration-b-acceptance.md) · [Findings F01–F14](docs/review-findings.csv)
 
-**Alpha — 0.2.1a1.** The pipeline generates synthetic boundary cases, compares reviewer judgments, optionally reviews the judge's result, and builds candidate preference pairs from the final result. Current rules cover covert traffic diversion and low-information content. Generated targets, model judgments and heuristic scores are not verified labels. Human-review validity and downstream training benefits have not been established.
+**Alpha 0.3.0a1.** Declarative PolicyPacks define languages, labels, evidence and ordered decisions. The kernel generates cases, stores weak candidates, reviews judge candidates against original text, validates policy consistency, and exports preference pairs with provenance. Acceptance means engineering consistency, **not human ground truth, model accuracy or demonstrated training benefit**.
 
-## Start with the recorded demo
+## Recorded demo
 
-Requires Python 3.11 or newer:
+Python 3.11/3.12, macOS/Linux:
 
 ```bash
 git clone https://github.com/dengxianghua888-ops/ecoalign-forge.git
 cd ecoalign-forge
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .
+python -m pip install -e '.[dev]'
+python -m ecoalign_forge run --demo --num-samples 5
+# Historical spelling also works:
 python -m ecoalign_forge --demo --num-samples 5
-```
-
-The demo uses recorded fixtures and does not call an LLM API. It prints execution mode, terminal status, stage counts, decision severity, pair heuristic and output path. This demonstrates the recorded-data workflow, not live-model performance. The [acceptance record](docs/iteration-a-acceptance.md) lists the actual verification status of this revision.
-
-For a runnable Python example that also saves an HTML diagnostic report:
-
-```bash
 python examples/quickstart.py
 ```
 
-This example also defaults to `demo=True`. Open the report path it prints in your browser. Its counts come from the same run; severity and heuristic scores do not measure correctness.
+Five recorded fixtures produce five completed cases and three preference pairs, with zero external model requests. Demo/mock record null actual models. Default CLI mode is demo. To install a release without cloning, download its verified wheel from [GitHub Releases](https://github.com/dengxianghua888-ops/ecoalign-forge/releases), then `python -m pip install /path/to/downloaded.whl`. No PyPI release is implied.
 
-## Workflow and run status
-
-```text
-Built-in rules + generation targets
-  → synthetic cases with request_item_id
-  → reviewer judgments → rule-guided judge
-  → optional review of the judgment against rules
-  → final judgments → candidate pairs + provenance + diagnostics
-```
-
-Every generation response must return every requested ID exactly once. The pipeline restores request order and writes `metadata.generation_target` from the local request. This records intent, not ground truth. Review failures remain visible rather than becoming successful confirmations. The reviewer currently receives the judgment and rules, not the original content; verification of original-content evidence remains F09 follow-up work.
-
-`completed` means processing completed, including valid judgments with no preference signal. It does not mean every case produced a pair or that the pairs are correct. Terminal counts satisfy:
+## Rules, execution and recovery
 
 ```text
-completed + failed + unattempted = requested
+PolicyPack + immutable RunConfig
+  → persisted sampling plan → generation
+  → weak moderation → judge candidate → original-source review
+  → evidence and policy gate → preference pair → immutable exports
 ```
 
-CLI exit codes: **0** completed, **3** partial failure, **1** failure, **130** cancelled, **2** invalid arguments. Automation must check exit status and `status`, not just dataset-file existence.
-
-## Output locations
-
-New outputs are separated by execution mode:
-
-```text
-data/
-├── demo/                     # recorded fixtures
-│   ├── metrics.json
-│   ├── runs.jsonl
-│   ├── flywheel_state.json
-│   └── diagnostics_<run-id>.json
-├── live/                     # real model calls
-├── mock/                     # explicit test execution
-└── datasets/
-    ├── demo/dpo_pairs_*.jsonl
-    ├── live/dpo_pairs_*.jsonl
-    └── mock/dpo_pairs_*.jsonl
-```
-
-Run records and pair lineage carry `execution_mode`; demo records also identify the fixture version. Historical records without a mode stay `unknown` and are not automatically promoted to live evidence. `DATA_DIR` and `DATASETS_DIR` configure base paths. Per-stage recovery and resumable runs remain future work.
-
-## Run a small live batch
-
-From the repository root, copy the configuration and supply provider credentials, base URL and model IDs you can actually access:
+The built-in Chinese A/B handbook is one pack. A [custom English pack](examples/contact_policy.en.json) shows open labels and actions. The schema and prompt pipeline permit arbitrary language; language-specific model quality remains unverified. Rules allow fixed boolean, label and score comparisons, exceptions and decision tables; packs cannot execute code.
 
 ```bash
-cp .env.example .env
-# Edit .env before running: provider configuration and three agent model assignments.
-python -m ecoalign_forge --num-samples 5
+python -m ecoalign_forge inspect data/demo/runs/RUN_ID
+python -m ecoalign_forge resume data/demo/runs/RUN_ID
+python -m ecoalign_forge export data/demo/runs/RUN_ID
+# Only after explicitly choosing how to handle an unknown remote request:
+python -m ecoalign_forge resume data/live/runs/RUN_ID --resolve 'ATTEMPT_ID=retry'
 ```
 
-Omitting `--demo` makes real model calls. Content and rules go to the configured provider and API usage can incur charges. This Alpha has no verified per-pair price or automatic budget cap. Start small and inspect failures and outputs.
+Each run has a SQLite WAL journal at `DATA_DIR/<mode>/runs/<run_id>/`. Saved complete responses replay locally. Unknown requests pause instead of silently repeating a potentially charged call. Only budget increases and deadline extensions are allowed on resume; rule, model, prompt and code changes require a new run. One executor owns each run; multiple runs share concurrency/RPM/TPM within the same data root and quota group.
 
-Execution supports `zh`/`zh-CN`, unique non-empty subsets of `stealth_marketing` and `ai_slop`, and default severity metadata. The authoritative text is [the packaged A/B handbook](src/ecoalign_forge/resources/guidelines.md). Dimension descriptions, examples and platform context are descriptive metadata, not replacement rules. Selected dimensions do not change the fixed A/B decision matrix.
+Counts satisfy `completed + failed + unattempted + in_progress = requested`, and `accepted_cases + excluded_cases = completed`. An excluded semantic candidate is completed processing, but never chosen. Review failure/abstention is failed. Exit codes: **0** completed, **1** failed, **2** invalid arguments, **3** partial failure, **4** paused, **130** cancelled.
 
-**Configuration boundary:** `PipelineConfig.num_samples` and `batch_size` control run sizing. `DEFAULT_*` synthesis environment fields, `PipelineConfig.max_concurrent`, `temperature` and `min_preference_gap` are not fully wired to execution. Do not rely on them as enforced concurrency, temperature or filtering controls. `PARSE_*` controls bounded parsing retries. Global limits, budgets and configuration unification are separate follow-up work.
+## Live configuration
 
-## Inspect the dashboard
+Live requires an explicit USD cap and complete price snapshot. Configure provider credentials in environment variables, never in a PolicyPack or RunConfig. Then supply a [RunConfig JSON](docs/iteration-b-migration.md):
 
-The dashboard currently runs from a source checkout; a wheel alone does not contain the `dashboard/` application directory. In the activated environment, **from the cloned repository root**:
+```bash
+python -m ecoalign_forge run --mode live --config /path/to/verified-live-config.json --policy examples/contact_policy.en.json
+```
+
+Defaults enforce 5 concurrent requests, 3 attempts total including parsing retries, 120-second request timeout, 30-second idle stream timeout and 3600-second run deadline. Requested model prices estimate cost from returned usage; missing usage remains reserved. Actual supplier billing stays unknown. This tool does not claim control over other clients using the same account. Release acceptance makes no paid calls.
+
+## Exports and metrics
+
+Each immutable dataset version contains `pairs.jsonl`, `trl_standard.jsonl`, `trl_conversational.jsonl`, `train_sharegpt.json`, `dataset_info.json`, `policy.json`, a data card and a SHA-256 manifest. Source IDs, text hashes, rule snapshot and response hashes remain in lineage. Data licensing is **unspecified** unless the policy declares it; the source-code license does not transfer automatically.
+
+The consumer checks run actual loading, templates, tokenization and collators in **separate locked environments**: TRL 1.14.0 and LLaMA-Factory 0.9.5. They use a local byte tokenizer without pretrained models or training. See `scripts/consumers/verify.py` and the migration guide.
+
+Severity exists only if the pack defines it; unordered labels have no invented quality score. Krippendorff alpha uses normalized coincidences and nullable estimates. Deliberately biased Moderator/Judge comparisons are candidate disagreement diagnostics, not independent-annotator reliability or data-quality gates.
+
+## Source dashboard
+
+From the repository root:
 
 ```bash
 python -m pip install -e '.[dashboard]'
 python -m streamlit run dashboard/app.py --server.port 8501
 ```
 
-Open Streamlit's printed local URL and explicitly select the data source. Missing data remains empty and read errors remain errors; the UI does not substitute synthetic success data. Connection labels remain “not checked” until a real probe exists. A visible dashboard is not model-quality validation.
+Select mode, actual run, dimension labels or actions. Inspect pauses, counts, errors and budget reservations. Historical A/unknown data is a separate read-only view. Empty or damaged data never becomes random demo data. Connection status is “not tested” until tested; this dashboard does not include C's review workbench.
 
-## Export candidate data
-
-Use the plain-text interchange format for inspection:
-
-```python
-from ecoalign_forge.export import export_trl
-from ecoalign_forge.storage.store import DataStore
-
-pairs = DataStore().load_dpo_pairs("PATH_PRINTED_BY_YOUR_RUN")
-export_trl(pairs, "train.jsonl", include_metadata=True)
-```
-
-Records contain `prompt`, `chosen` and `rejected`; `include_metadata=True` preserves lineage in this format. ShareGPT and conversational exporters also exist, but a pinned trainer-consumption test is pending. The conversational export is not claimed compatible with current TRL chat templating. Exportable JSON is not evidence of successful training or model improvement. See F10 in the [finding ledger](docs/review-findings.csv).
-
-## Read the metrics
-
-| Metric | Meaning |
-|---|---|
-| `avg_decision_severity` | Average mapped T0–T3 severity; higher means stricter judgments |
-| `avg_pair_quality_heuristic` | Structural and heuristic properties of candidate pairs; `null` means not computed |
-| `interception_rate` | Share of T0/T1 judgments, not detection accuracy |
-| Rule coverage | References observed in judgments, not validated semantic correctness |
-| IAA | Agreement between model judgments; it does not establish which judgment is correct |
-| Flywheel history | Synthesis-round records; quality improvement and training convergence remain **not evaluated** |
-
-Historical `avg_quality_score`/`avg_quality` names described severity. Compatibility reads warn. Do not chart their old values as accuracy or training improvements; see [migration](docs/iteration-a-migration.md).
-
-## Scope and development
-
-Current scope is text-based Chinese A/B content-distribution rules. This is not a generic safety-policy engine, AI-authorship detector, production moderation service or autonomous training system. Four reviewer personas exist; default orchestration uses one persona per run. We make no claim of replacing human labeling, fixed generation cost or downstream model improvement.
+## Verification and scope
 
 ```bash
-python -m pip install -e '.[dev]'
-python -m pytest tests/
-python -m ruff check src/ tests/
+python -m pytest tests -q
+ruff check .
+python -m hatchling build
+python scripts/accept_iteration_b.py --output /tmp/ecoalign-b
 ```
 
-For a reproducible issue, include the version/commit, execution mode, command, sanitized configuration, terminal status and diagnostics. Remove credentials and private content. Rule changes should include positive and negative examples and their intended tiers. Original finding IDs remain in the [iteration ledger](docs/review-findings.csv); implementation and acceptance are separate states.
+The [acceptance record](docs/iteration-b-acceptance.md) links version-bound evidence. F07–F11 cover portable contracts, recovery, evidence gates, consumer correctness and budgets. F12–F14 remain open: review workbench, new-user acceptance, real-model/human evaluation and training outcomes. Historic A adapters and files remain readable; [migration notes](docs/iteration-b-migration.md) document changed assertions and compatibility limits.
 
-Related work: [Constitutional AI](https://arxiv.org/abs/2212.08073), [HarmBench](https://arxiv.org/abs/2402.04249), [PyRIT](https://github.com/Azure/PyRIT), [TRL](https://github.com/huggingface/trl). References are not claims of equivalent coverage or reproduced performance.
-
-[Apache License 2.0](LICENSE). Input-data rights and provider terms are separate from the software license.
+Code license: [Apache-2.0](LICENSE).

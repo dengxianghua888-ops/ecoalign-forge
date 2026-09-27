@@ -18,9 +18,17 @@ from tests.test_iteration_b_policy import pack_data
 
 class RecordedTransport:
     def __init__(
-        self, pack, *, text="Contact raven", reviewer=None, corrupt_stage=None, call_log=None
+        self,
+        pack,
+        *,
+        text="Contact raven",
+        reviewer=None,
+        corrupt_stage=None,
+        call_log=None,
+        hits=None,
     ):
         self.compiled = compile_policy(pack)
+        self.hits = hits or {"CONTACT"}
         self.text = text
         self.reviewer = reviewer
         self.corrupt_stage = corrupt_stage
@@ -45,9 +53,15 @@ class RecordedTransport:
             ]
         else:
             source = SourceText.model_validate(data["source"])
-            ev = fixture_candidate(self.compiled, source, {"CONTACT"})
+            ev = fixture_candidate(self.compiled, source, self.hits)
             if stage == "moderator":
-                ev = ev.model_copy(update={"final_action": "allow"})
+                ev = ev.model_copy(
+                    update={
+                        "final_action": "allow"
+                        if "allow" in self.compiled.pack.actions
+                        else self.compiled.pack.actions[-1]
+                    }
+                )
             if stage == "reviewer":
                 value = (
                     self.reviewer(ev)
@@ -268,3 +282,24 @@ async def test_model_cannot_skip_enabled_review(tmp_path):
     )
     result = await k.run(pack, RunConfig(execution_mode="mock", num_samples=1))
     assert result["status"] == "failed" and result["counts"]["dpo_pairs"] == 0
+
+
+@pytest.mark.asyncio
+async def test_builtin_and_custom_same_source_full_export(tmp_path):
+    text = "联系微信 raven / Contact raven"
+    observed = []
+    for index, (pack, hits) in enumerate(
+        [(builtin_pack(), {"A-001"}), (PolicyPack.model_validate(pack_data()), {"CONTACT"})]
+    ):
+        transport = RecordedTransport(pack, text=text, hits=hits)
+        k = kernel(tmp_path / str(index), transport)
+        result = await k.run(pack, RunConfig(execution_mode="mock", num_samples=1))
+        assert result["status"] == "completed" and result["counts"]["dpo_pairs"] == 1
+        pair = json.loads(Path(result["output_path"]).read_text().splitlines()[0])
+        chosen = json.loads(pair["chosen"])
+        observed.append(chosen["final_action"])
+        assert chosen["evidence"][0]["quote"] == text
+        review = next(body for stage, _, body in transport.calls if stage == "reviewer")
+        assert review["input"]["source"]["content"] == text
+        assert review["policy_hash"] == pair["lineage"]["policy_hash"]
+    assert observed == ["T1_Shadowban", "review"]
