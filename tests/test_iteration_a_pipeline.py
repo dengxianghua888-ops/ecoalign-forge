@@ -17,7 +17,6 @@ from ecoalign_forge.schemas.execution import ExecutionMode
 from ecoalign_forge.schemas.judge import JudgeEvaluation
 from ecoalign_forge.schemas.pipeline import (
     PipelineConfig,
-    PipelineResult,
     PipelineStatus,
     RunCounts,
 )
@@ -583,19 +582,13 @@ def test_cli_returns_terminal_status_exit_code(monkeypatch, capsys, status, exit
         if status == PipelineStatus.COMPLETED
         else RunCounts(requested=1, failed=1)
     )
-    result = PipelineResult(
-        run_id="cli-run",
-        status=status,
-        execution_mode="mock",
-        counts=counts,
-        total_cases=counts.completed,
-        total_evaluations=1,
-        total_dpo_pairs=0,
+    result = dict(
+        status=status.value, execution_mode="mock", counts=counts.model_dump(), exit_code=exit_code
     )
     mock_orch = SimpleNamespace(run=AsyncMock(return_value=result))
     monkeypatch.setattr("sys.argv", ["ecoalign-forge", "--num-samples", "1"])
     with (
-        patch("ecoalign_forge.engine.orchestrator.AgentOrchestrator", return_value=mock_orch),
+        patch("ecoalign_forge.engine.kernel.SynthesisKernel", return_value=mock_orch),
         pytest.raises(SystemExit) as exc,
     ):
         main()
@@ -611,7 +604,7 @@ def test_cli_rejects_out_of_range_count_before_constructing_pipeline(monkeypatch
     monkeypatch.setattr("sys.argv", ["ecoalign-forge", "--num-samples", invalid])
     constructor = MagicMock()
     with (
-        patch("ecoalign_forge.engine.orchestrator.AgentOrchestrator", constructor),
+        patch("ecoalign_forge.engine.kernel.SynthesisKernel", constructor),
         pytest.raises(SystemExit) as exc,
     ):
         main()

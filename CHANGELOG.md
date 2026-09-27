@@ -1,3 +1,12 @@
+# 0.3.0a1 — portable, resumable synthesis
+
+- Versioned declarative PolicyPack and source-bound candidate/final contracts; arbitrary label vocabularies.
+- SQLite WAL journals, conservative unknown-request pause, explicit resume choices and immutable exports.
+- Effective RunConfig, one shared retry/controller layer, process-wide quotas and per-attempt cost reservations.
+- Original-source review and final evidence/matrix gates before machine preference pairing.
+- Corrected coincidence-based IAA, nullable severity, TRL and ShareGPT consumer views with fixed dependency locks.
+- Run-based dashboard and migration guide. No paid model, training or PyPI acceptance is claimed.
+
 # Changelog
 
 ## 0.2.1a1 — Iteration A Alpha

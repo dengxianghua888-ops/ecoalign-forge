@@ -20,10 +20,13 @@ class PipelineStatus(StrEnum):
     PARTIAL_FAILED = "partial_failed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    PAUSED = "paused"
 
     @property
     def exit_code(self) -> int:
-        return {self.COMPLETED: 0, self.PARTIAL_FAILED: 3, self.CANCELLED: 130}.get(self, 1)
+        return {self.COMPLETED: 0, self.PARTIAL_FAILED: 3, self.CANCELLED: 130, self.PAUSED: 4}.get(
+            self, 1
+        )
 
 
 class PipelineConfig(BaseModel):
@@ -44,12 +47,13 @@ class RunCounts(BaseModel):
     completed: int = Field(default=0, ge=0)
     failed: int = Field(default=0, ge=0)
     unattempted: int = Field(default=0, ge=0)
+    in_progress: int = Field(default=0, ge=0)
     no_signal: int = Field(default=0, ge=0)
     dpo_pairs: int = Field(default=0, ge=0)
 
     def assert_conserved(self) -> None:
-        if self.completed + self.failed + self.unattempted != self.requested:
-            raise ValueError("completed + failed + unattempted must equal requested")
+        if self.completed + self.failed + self.unattempted + self.in_progress != self.requested:
+            raise ValueError("completed + failed + unattempted + in_progress must equal requested")
 
 
 class PipelineRun(BaseModel):

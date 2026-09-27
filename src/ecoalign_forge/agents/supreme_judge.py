@@ -125,6 +125,14 @@ class SupremeJudge(BaseAgent):
         返回的 judge_results 与 cases 保持位置对齐（失败位为 None），
         调用方按 index 关联时语义一致。
         """
+        import warnings
+
+        warnings.warn(
+            "SupremeJudge.run is a deprecated built-in policy adapter",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        policy.validate_supported()
         if len(cases) != len(responses):
             raise ValueError(
                 f"cases ({len(cases)}) 与 responses ({len(responses)}) "

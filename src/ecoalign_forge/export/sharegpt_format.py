@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ecoalign_forge.export.trl_format import prompt_messages
 from ecoalign_forge.schemas.dpo import DPO_Pair
 
 
@@ -24,7 +25,11 @@ def to_sharegpt_dict(pair: DPO_Pair) -> dict:
     """将单条 DPO_Pair 转换为 ShareGPT 对话格式。"""
     return {
         "conversations": [
-            {"from": "human", "value": pair.prompt},
+            {
+                "from": {"system": "system", "user": "human", "assistant": "gpt"}[m["role"]],
+                "value": m["content"],
+            }
+            for m in prompt_messages(pair)
         ],
         "chosen": {"from": "gpt", "value": pair.chosen},
         "rejected": {"from": "gpt", "value": pair.rejected},

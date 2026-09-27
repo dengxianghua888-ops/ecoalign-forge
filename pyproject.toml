@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ecoalign-forge"
-version = "0.2.1a1"
+version = "0.3.0a1"
 description = "Multi-Agent framework for content moderation & alignment (RLHF/DPO) data synthesis."
 readme = "README.md"
 license = "Apache-2.0"
@@ -39,6 +39,7 @@ dashboard = [
 ]
 dev = [
     "hatchling>=1.25.0",
+    "krippendorff==0.8.2",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=5.0.0",

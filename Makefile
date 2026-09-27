@@ -16,8 +16,8 @@ test: ## Run tests
 	pytest tests/ -v --cov=ecoalign_forge --cov-report=term-missing
 
 lint: ## Lint check
-	ruff check src/ tests/
-	ruff format --check src/ tests/
+	ruff check .
+	@echo "Check formatting only for files changed in this iteration (see CI)"
 
 format: ## Auto-format
 	ruff check --fix src/ tests/

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import warnings
 from copy import deepcopy
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -54,6 +55,15 @@ class AgentOrchestrator:
         self.execution_mode = ExecutionMode.DEMO if demo else mode
         if self.execution_mode == ExecutionMode.UNKNOWN:
             raise ValueError("unknown is reserved for historical records")
+        if self.execution_mode == ExecutionMode.LIVE:
+            raise ValueError(
+                "Legacy live orchestration is disabled; use SynthesisKernel with RunConfig and an explicit budget"
+            )
+        warnings.warn(
+            "AgentOrchestrator is a legacy fixture API; use SynthesisKernel",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.demo = self.execution_mode == ExecutionMode.DEMO
         self.fixture_version = None
         self.llm = LLMClient(allow_network=self.execution_mode == ExecutionMode.LIVE)

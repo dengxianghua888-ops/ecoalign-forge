@@ -45,4 +45,35 @@ jobs:
           ecoalign-forge --demo --num-samples 5
 
       - name: Deterministic success and controlled failure evidence
-        run: python scripts/accept_iteration_a.py --output /tmp/ecoalign-acceptance
+        run: |
+          python scripts/accept_iteration_a.py --output /tmp/ecoalign-acceptance-a
+          python scripts/accept_iteration_b.py --output /tmp/ecoalign-acceptance-b
+
+  consumers:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        consumer: [trl, llamafactory]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - name: Build deterministic dataset
+        run: |
+          uv venv /tmp/kernel
+          uv pip install --python /tmp/kernel/bin/python -e '.[dev]'
+          /tmp/kernel/bin/python scripts/accept_iteration_b.py --output /tmp/acceptance --skip-fault-tests
+      - name: Install isolated locked consumer
+        run: |
+          uv venv /tmp/consumer
+          uv pip install --python /tmp/consumer/bin/python --torch-backend cpu -r scripts/consumers/${{ matrix.consumer }}.lock
+      - name: Actual loader, template, tokenizer and collator
+        run: |
+          DATASET=$(find /tmp/acceptance/datasets/demo -name manifest.json -print -quit)
+          /tmp/consumer/bin/python scripts/consumers/verify.py ${{ matrix.consumer }} "$(dirname "$DATASET")" --output /tmp/${{ matrix.consumer }}-acceptance.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: consumer-${{ matrix.consumer }}
+          path: /tmp/${{ matrix.consumer }}-acceptance.json
