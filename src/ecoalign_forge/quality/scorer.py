@@ -1,7 +1,7 @@
-"""QualityScorer — DPO 偏好对多维度质量评分。
+"""QualityScorer — DPO 偏好对的结构启发式评分。
 
-参考 UltraFeedback 四维评分 + CLEAR 管道质量评估方法论。
 每个维度输出 [0.0, 1.0] 的标准化分数，综合分为加权平均。
+分数不代表标签正确率、人工偏好置信度或训练效果。
 
 维度权重可通过构造函数调节，满足不同场景侧重。
 """
@@ -13,7 +13,6 @@ import re
 from dataclasses import dataclass
 
 from ecoalign_forge.schemas.dpo import DPO_Pair
-from ecoalign_forge.schemas.judge import DECISION_SEVERITY
 
 # 规则编号正则
 _RULE_ID_PATTERN = re.compile(r"\b([AB]-\d{3})\b")
@@ -23,7 +22,6 @@ _DEFAULT_WEIGHTS: dict[str, float] = {
     "reasoning_depth": 0.25,
     "information_density": 0.15,
     "preference_clarity": 0.25,
-    "decision_consistency": 0.20,
     "response_completeness": 0.15,
 }
 
@@ -36,7 +34,7 @@ class QualityReport:
     reasoning_depth: float
     information_density: float
     preference_clarity: float
-    decision_consistency: float
+    decision_consistency: float  # Deprecated: neutral 0.5; no semantic validation performed.
     response_completeness: float
 
     # 综合分
@@ -64,7 +62,7 @@ class QualityScorer:
         weights: dict[str, float] | None = None,
         low_quality_threshold: float = 0.4,
     ) -> None:
-        self.weights = weights or _DEFAULT_WEIGHTS
+        self.weights = dict(weights or _DEFAULT_WEIGHTS)
         self.low_quality_threshold = low_quality_threshold
 
     def score(self, pair: DPO_Pair) -> QualityReport:
@@ -139,7 +137,9 @@ class QualityScorer:
         space_tokens = trace.split()
         # 中文 bigram 能真正区分语义重复度（"的的的" → 高重复，正常文本 → 低重复）
         chars = trace.replace(" ", "")
-        bigrams = [chars[i:i+2] for i in range(len(chars) - 1)] if len(chars) > 1 else list(chars)
+        bigrams = (
+            [chars[i : i + 2] for i in range(len(chars) - 1)] if len(chars) > 1 else list(chars)
+        )
         # 若空格分词产出足够多 token（英文为主），使用空格分词；否则用 bigram
         tokens = space_tokens if len(space_tokens) >= 5 else bigrams
 
@@ -160,24 +160,8 @@ class QualityScorer:
 
     @staticmethod
     def _decision_consistency(pair: DPO_Pair) -> float:
-        """决策一致性：chosen 和 rejected 的 final_decision 是否合理。
-
-        - chosen 比 rejected 更严格（severity 更高）→ 1.0
-        - 两者相同 → 0.5（推理质量对，合理但弱信号）
-        - chosen 比 rejected 宽松 → 0.0（异常数据）
-        """
-        chosen_data = _safe_parse_json(pair.chosen)
-        rejected_data = _safe_parse_json(pair.rejected)
-
-        # 使用权威映射 DECISION_SEVERITY，避免与 judge.py 不一致
-        c_sev = DECISION_SEVERITY.get(chosen_data.get("final_decision", ""), 0.0)
-        r_sev = DECISION_SEVERITY.get(rejected_data.get("final_decision", ""), 0.0)
-
-        if c_sev > r_sev:
-            return 1.0
-        if c_sev == r_sev:
-            return 0.5
-        return 0.0
+        """兼容保留的中性值；默认不参与综合分，也不声称验证了语义。"""
+        return 0.5
 
     @staticmethod
     def _response_completeness(pair: DPO_Pair) -> float:
