@@ -241,7 +241,7 @@ class RequestController:
         model = self.config.models[stage]
         estimated_input = len(canonical(messages).encode()) + 256 * len(messages)
         if self.config.execution_mode.value != "live":
-            return Decimal(0), min(estimated_input + model.max_tokens, self.config.tpm)
+            return Decimal(0), 0
         price = self.config.prices[model.model]
         if estimated_input > price.max_input_tokens:
             raise RequestFailedError("Prompt exceeds explicit input token upper bound")
