@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import datetime
-import random
 from html import escape
 from typing import TYPE_CHECKING
 
@@ -17,6 +15,8 @@ _BADGE_MAP: dict[str, str] = {
     "running": "b-run",
     "completed": "b-done",
     "failed": "b-fail",
+    "partial_failed": "b-fail",
+    "cancelled": "b-wait",
     "pending": "b-wait",
 }
 
@@ -25,6 +25,8 @@ _STATUS_ZH: dict[str, str] = {
     "running": "运行中",
     "completed": "已完成",
     "failed": "失败",
+    "partial_failed": "部分失败",
+    "cancelled": "已取消",
     "pending": "等待中",
 }
 
@@ -40,40 +42,6 @@ _STAGE_COLORS: dict[str, str] = {
 }
 
 
-def _generate_demo_runs() -> list[dict]:
-    """生成 Demo 模式的流水线运行记录。"""
-    statuses = ["running", "running", "running", "completed", "completed",
-                "completed", "completed", "failed", "pending"]
-    stage_opts = ["混沌生成", "策略审核", "终审裁决", "已完成"]
-    mdl_opts = ["gpt-5.4-mini", "gpt-5.4", "claude-4-sonnet", "qwen-3-72b"]
-    pol_opts = ["安全标准 v2", "内容合规 v1", "反歧视策略", "隐私保护 v3"]
-
-    now = datetime.datetime.now()
-    runs: list[dict] = []
-    for _ in range(10):
-        s = random.choice(statuses)
-        prog = (
-            100.0 if s == "completed"
-            else 0.0 if s == "pending"
-            else random.randint(15, 92) if s == "running"
-            else random.randint(20, 60)
-        )
-        runs.append({
-            "run_id": f"run-{random.randint(1000, 9999)}",
-            "status": s,
-            "policy": random.choice(pol_opts),
-            "stage": random.choice(stage_opts) if s == "running" else (
-                "—" if s == "pending" else "完成" if s == "completed" else "异常"
-            ),
-            "model": random.choice(mdl_opts),
-            "total": random.randint(50, 500),
-            "dpo_pairs_generated": random.randint(20, 350),
-            "progress_pct": prog,
-            "started_at": (now - datetime.timedelta(hours=random.randint(0, 48))).strftime("%m-%d %H:%M"),
-        })
-    return runs
-
-
 def _resolve_stage(run: dict) -> str:
     """根据运行记录推断阶段显示文本。"""
     # 如果记录已提供 stage 字段，直接使用
@@ -85,7 +53,7 @@ def _resolve_stage(run: dict) -> str:
         return "完成"
     if status == "pending":
         return "—"
-    if status == "failed":
+    if status in ("failed", "partial_failed", "cancelled"):
         return "异常"
     return "运行中"
 
@@ -98,7 +66,10 @@ def render_pipeline_monitor(snap: DashboardSnapshot) -> None:
     )
 
     # 优先使用真实数据，为空回退到 Demo
-    runs = snap.pipeline_runs if snap.pipeline_runs else _generate_demo_runs()
+    runs = snap.pipeline_runs
+    if not runs:
+        st.info("暂无运行记录")
+        return
 
     # 表头
     headers = ["运行 ID", "策略", "阶段", "模型", "用例数", "DPO", "进度", "状态", "启动时间"]
@@ -110,8 +81,8 @@ def render_pipeline_monitor(snap: DashboardSnapshot) -> None:
     for h in headers:
         html += (
             f'<th style="padding:12px 8px;text-align:left;color:rgba(255,255,255,.35);'
-            f'font-family:JetBrains Mono,monospace;font-size:.65rem;letter-spacing:1.2px;'
-            f'text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.04);'
+            f"font-family:JetBrains Mono,monospace;font-size:.65rem;letter-spacing:1.2px;"
+            f"text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.04);"
             f'font-weight:500">{h}</th>'
         )
     html += "</tr></thead><tbody>"
@@ -144,7 +115,9 @@ def render_pipeline_monitor(snap: DashboardSnapshot) -> None:
             f"{run_id}</span></td>"
         )
         # 策略
-        html += f'<td style="{td_style}"><span style="color:rgba(255,255,255,.6)">{policy}</span></td>'
+        html += (
+            f'<td style="{td_style}"><span style="color:rgba(255,255,255,.6)">{policy}</span></td>'
+        )
         # 阶段（stage 来自映射表，颜色用原始未转义键查找）
         stage_clr = _STAGE_COLORS.get(_resolve_stage(r), "rgba(255,255,255,.3)")
         html += (
@@ -159,15 +132,20 @@ def render_pipeline_monitor(snap: DashboardSnapshot) -> None:
             f"{model}</span></td>"
         )
         # 用例数
-        html += f'<td style="{td_style}"><span style="color:rgba(255,255,255,.6)">{total}</span></td>'
+        html += (
+            f'<td style="{td_style}"><span style="color:rgba(255,255,255,.6)">{total}</span></td>'
+        )
         # DPO
         html += f'<td style="{td_style}"><span style="color:rgba(255,255,255,.6)">{dpo}</span></td>'
         # 进度条（progress 是 float，无需转义）
         prog_val = float(prog)
         pc = (
-            "#55efc4" if prog_val == 100
-            else "#6c5ce7" if prog_val > 50
-            else "#ffeaa7" if prog_val > 0
+            "#55efc4"
+            if prog_val == 100
+            else "#6c5ce7"
+            if prog_val > 50
+            else "#ffeaa7"
+            if prog_val > 0
             else "rgba(255,255,255,.08)"
         )
         html += (

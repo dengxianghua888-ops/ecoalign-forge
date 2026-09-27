@@ -12,18 +12,22 @@ def _make_pair(
     reasoning: str = "第一步：发现微信号。第二步：命中 A-001 和 A-003 规则。第三步：判定 T0_Block。",
     gap: float = 0.8,
 ) -> DPO_Pair:
-    chosen = json.dumps({
-        "has_stealth_marketing": True,
-        "is_ai_slop": False,
-        "reasoning_trace": reasoning,
-        "final_decision": chosen_decision,
-    })
-    rejected = json.dumps({
-        "has_stealth_marketing": False,
-        "is_ai_slop": False,
-        "reasoning_trace": "第一步：看起来正常。第二步：未命中。第三步：通过。",
-        "final_decision": rejected_decision,
-    })
+    chosen = json.dumps(
+        {
+            "has_stealth_marketing": True,
+            "is_ai_slop": False,
+            "reasoning_trace": reasoning,
+            "final_decision": chosen_decision,
+        }
+    )
+    rejected = json.dumps(
+        {
+            "has_stealth_marketing": False,
+            "is_ai_slop": False,
+            "reasoning_trace": "第一步：看起来正常。第二步：未命中。第三步：通过。",
+            "final_decision": rejected_decision,
+        }
+    )
     return DPO_Pair(
         prompt="Moderate this",
         chosen=chosen,
@@ -55,11 +59,35 @@ class TestQualityScorer:
         assert report.response_completeness <= 0.5
 
     def test_decision_consistency_normal(self):
-        """chosen 比 rejected 更严格 → 一致性 1.0"""
+        """兼容字段为中性值，不再奖励更严格的判决。"""
         scorer = QualityScorer()
         pair = _make_pair(chosen_decision="T0_Block", rejected_decision="T2_Normal")
         report = scorer.score(pair)
-        assert report.decision_consistency == 1.0
+        assert report.decision_consistency == 0.5
+
+    def test_severity_direction_does_not_change_score(self):
+        """同等结构的纠正误杀与纠正漏判得到相同分数。"""
+        scorer = QualityScorer()
+        stricter = _make_pair(chosen_decision="T0_Block", rejected_decision="T3_Recommend")
+        more_lenient = _make_pair(chosen_decision="T3_Recommend", rejected_decision="T0_Block")
+        assert scorer.score(stricter) == scorer.score(more_lenient)
+
+    def test_default_score_excludes_deprecated_consistency_dimension(self):
+        scorer = QualityScorer()
+        report = scorer.score(_make_pair())
+        expected = (
+            report.reasoning_depth * 0.25
+            + report.information_density * 0.15
+            + report.preference_clarity * 0.25
+            + report.response_completeness * 0.15
+        ) / 0.8
+        assert scorer.weights.get("decision_consistency", 0) == 0
+        assert report.overall == round(expected, 4)
+
+    def test_legacy_custom_consistency_weight_remains_neutral(self):
+        scorer = QualityScorer(weights={"decision_consistency": 1})
+        for chosen, rejected in (("T0_Block", "T3_Recommend"), ("T3_Recommend", "T0_Block")):
+            assert scorer.score(_make_pair(chosen, rejected)).overall == 0.5
 
     def test_decision_consistency_same(self):
         """同档位 → 一致性 0.5"""
@@ -91,12 +119,14 @@ class TestQualityScorer:
 class TestTaxonomy:
     def test_harm_taxonomy_loaded(self):
         from ecoalign_forge.taxonomy import HARM_TAXONOMY
+
         assert "stealth_marketing" in HARM_TAXONOMY
         assert "ai_slop" in HARM_TAXONOMY
         assert "jailbreak" in HARM_TAXONOMY
 
     def test_attack_registry_loaded(self):
         from ecoalign_forge.taxonomy import ATTACK_REGISTRY
+
         assert len(ATTACK_REGISTRY) > 5
         # 验证已实现的攻击标记
         implemented = [a for a in ATTACK_REGISTRY.values() if a.implemented]
@@ -104,6 +134,7 @@ class TestTaxonomy:
 
     def test_evol_strategies_loaded(self):
         from ecoalign_forge.taxonomy import EVOL_STRATEGIES
+
         depth = [s for s in EVOL_STRATEGIES.values() if s.direction == "depth"]
         breadth = [s for s in EVOL_STRATEGIES.values() if s.direction == "breadth"]
         assert len(depth) >= 3

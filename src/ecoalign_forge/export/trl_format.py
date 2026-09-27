@@ -80,7 +80,9 @@ def export_trl(
 
     with open(path, "w", encoding="utf-8") as f:
         for pair in pairs:
-            record = to_trl_dict(pair, include_metadata=include_metadata, conversational=conversational)
+            record = to_trl_dict(
+                pair, include_metadata=include_metadata, conversational=conversational
+            )
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     return path
@@ -116,8 +118,7 @@ def export_trl_dataset_card(
         dim_counts[p.dimension] = dim_counts.get(p.dimension, 0) + 1
 
     dim_table = "\n".join(
-        f"| {dim} | {count} | {count / n * 100:.1f}% |"
-        for dim, count in sorted(dim_counts.items())
+        f"| {dim} | {count} | {count / n * 100:.1f}% |" for dim, count in sorted(dim_counts.items())
     )
 
     card = f"""---
@@ -146,7 +147,7 @@ language:
 
 # {dataset_name}
 
-{description or '由 EcoAlign-Forge 多智能体管道自动合成的 DPO 偏好训练数据集。'}
+{description or "由 EcoAlign-Forge 多智能体管道自动合成的 DPO 偏好训练数据集。"}
 
 ## 数据集统计
 
@@ -176,7 +177,7 @@ dataset = load_dataset("json", data_files="train.jsonl")
 数据通过 [EcoAlign-Forge](https://github.com/dengxianghua888-ops/ecoalign-forge) 的三阶段对抗管道生成：
 1. **ChaosCreator** — 红队攻击 Agent 反向构造边界用例
 2. **Moderator** — 多 persona 初级审核（故意不参考手册）
-3. **SupremeJudge** — 终审 Agent 按 guidelines.md 金标判决
+3. **SupremeJudge** — 终审 Agent 按 guidelines.md 机器判决
 
 偏好对构建策略：
 - 直接分歧：Judge 与 Moderator 的 final_decision 不同

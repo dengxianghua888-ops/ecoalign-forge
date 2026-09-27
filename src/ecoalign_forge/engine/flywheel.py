@@ -1,194 +1,269 @@
-"""FlyWheelOrchestrator — 数据飞轮多轮迭代编排器。
+"""Synthesis round history; downstream quality has not been evaluated.
 
-参考 Arena Learning (WizardLM) 数据飞轮方法论：
-  Round N: 合成 DPO 数据 → 训练 → 得到新模型
-  Round N+1: 用新模型替换 Moderator → 新一轮合成
-  对比 Round N 与 N+1 的质量指标 → 筛选增量数据
-
-核心价值（面试叙事）：
-- 构建 "数据 → 训练 → 评估 → 数据回流" 闭环
-- 每轮迭代自动追踪质量提升曲线
-- 数据版本化管理，支持回归分析
+Severity and pair heuristics are descriptive signals. Neither is evidence of
+model improvement or convergence, so those outcomes remain explicitly unknown.
 """
 
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
 import orjson
 
+from ecoalign_forge.exceptions import EcoAlignError
+from ecoalign_forge.schemas.execution import ExecutionMode
+
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+def _rounded(value: float | None) -> float | None:
+    return None if value is None else round(value, 4)
+
+
+@dataclass(init=False)
 class RoundMetrics:
-    """单轮迭代的质量指标快照。"""
+    """Descriptive metrics for one synthesis run, not training evaluation."""
+
     round_id: int
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(tz=UTC).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(tz=UTC).isoformat())
+    execution_mode: ExecutionMode = ExecutionMode.UNKNOWN
+    run_id: str | None = None
     total_dpo_pairs: int = 0
     avg_preference_gap: float = 0.0
     interception_rate: float = 0.0
-    avg_quality_score: float = 0.0
+    avg_decision_severity: float = 0.0
+    avg_pair_quality_heuristic: float | None = None
     cohens_kappa: float = 0.0
     krippendorffs_alpha: float = 0.0
-    correction_rate: float = 0.0  # Constitutional AI 修正率
-    moderator_model: str = ""
-    judge_model: str = ""
+    correction_rate: float | None = None
+    moderator_model: str | None = None
+    judge_model: str | None = None
+
+    def __init__(
+        self,
+        round_id: int,
+        timestamp: str | None = None,
+        total_dpo_pairs: int = 0,
+        avg_preference_gap: float = 0.0,
+        interception_rate: float = 0.0,
+        avg_quality_score: float | None = None,
+        cohens_kappa: float = 0.0,
+        krippendorffs_alpha: float = 0.0,
+        correction_rate: float | None = None,
+        moderator_model: str | None = None,
+        judge_model: str | None = None,
+        *,
+        execution_mode: ExecutionMode = ExecutionMode.UNKNOWN,
+        run_id: str | None = None,
+        avg_decision_severity: float | None = None,
+        avg_pair_quality_heuristic: float | None = None,
+    ) -> None:
+        if avg_quality_score is not None:
+            warnings.warn(
+                "avg_quality_score is deprecated; use avg_decision_severity",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if avg_decision_severity is None:
+                avg_decision_severity = avg_quality_score
+        self.round_id = round_id
+        self.timestamp = timestamp if timestamp is not None else datetime.now(tz=UTC).isoformat()
+        self.execution_mode = ExecutionMode(execution_mode)
+        self.run_id = run_id
+        self.total_dpo_pairs = total_dpo_pairs
+        self.avg_preference_gap = avg_preference_gap
+        self.interception_rate = interception_rate
+        self.avg_decision_severity = 0.0 if avg_decision_severity is None else avg_decision_severity
+        self.avg_pair_quality_heuristic = avg_pair_quality_heuristic
+        self.cohens_kappa = cohens_kappa
+        self.krippendorffs_alpha = krippendorffs_alpha
+        self.correction_rate = correction_rate
+        self.moderator_model = moderator_model
+        self.judge_model = judge_model
+
+    @property
+    def avg_quality_score(self) -> float:
+        """One-release compatibility alias for the historical severity field."""
+        warnings.warn(
+            "avg_quality_score is deprecated; use avg_decision_severity",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.avg_decision_severity
 
     def to_dict(self) -> dict:
         return {
             "round_id": self.round_id,
             "timestamp": self.timestamp,
+            "execution_mode": self.execution_mode.value,
+            "run_id": self.run_id,
             "total_dpo_pairs": self.total_dpo_pairs,
-            "avg_preference_gap": round(self.avg_preference_gap, 4),
-            "interception_rate": round(self.interception_rate, 4),
-            "avg_quality_score": round(self.avg_quality_score, 4),
-            "cohens_kappa": round(self.cohens_kappa, 4),
-            "krippendorffs_alpha": round(self.krippendorffs_alpha, 4),
-            "correction_rate": round(self.correction_rate, 4),
+            "avg_preference_gap": _rounded(self.avg_preference_gap),
+            "interception_rate": _rounded(self.interception_rate),
+            "avg_decision_severity": _rounded(self.avg_decision_severity),
+            "avg_pair_quality_heuristic": _rounded(self.avg_pair_quality_heuristic),
+            "cohens_kappa": _rounded(self.cohens_kappa),
+            "krippendorffs_alpha": _rounded(self.krippendorffs_alpha),
+            "correction_rate": _rounded(self.correction_rate),
             "moderator_model": self.moderator_model,
             "judge_model": self.judge_model,
         }
 
+    @classmethod
+    def from_dict(cls, raw: dict) -> RoundMetrics:
+        data = dict(raw)
+        if "avg_quality_score" in data:
+            legacy = data.pop("avg_quality_score")
+            if "avg_decision_severity" not in data:
+                warnings.warn(
+                    "Legacy avg_quality_score loaded as avg_decision_severity",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                data["avg_decision_severity"] = legacy
+        data.setdefault("execution_mode", ExecutionMode.UNKNOWN)
+        return cls(**data)
+
 
 @dataclass
 class FlyWheelState:
-    """飞轮全局状态，跨轮持久化。"""
+    """Mode-isolated round history with no inferred model-quality evidence."""
+
+    execution_mode: ExecutionMode = ExecutionMode.UNKNOWN
     current_round: int = 0
     rounds: list[RoundMetrics] = field(default_factory=list)
-    quality_trend: list[float] = field(default_factory=list)
     cumulative_dpo_pairs: int = 0
 
+    def __post_init__(self) -> None:
+        self.execution_mode = ExecutionMode(self.execution_mode)
+
     def add_round(self, metrics: RoundMetrics) -> None:
-        """记录新一轮迭代。"""
+        if metrics.execution_mode != self.execution_mode:
+            raise EcoAlignError("Cannot combine flywheel rounds with different execution modes")
         self.rounds.append(metrics)
-        self.quality_trend.append(metrics.avg_quality_score)
         self.cumulative_dpo_pairs += metrics.total_dpo_pairs
         self.current_round = metrics.round_id
 
     @property
-    def quality_improvement(self) -> float:
-        """最近一轮相对于第一轮的质量提升幅度。"""
-        if len(self.quality_trend) < 2:
-            return 0.0
-        baseline = self.quality_trend[0]
-        if baseline == 0.0:
-            return 0.0
-        latest = self.quality_trend[-1]
-        return (latest - baseline) / baseline
+    def quality_trend(self) -> list[float]:
+        """No independent model evaluation exists in this Alpha."""
+        return []
 
     @property
-    def round_over_round_improvement(self) -> float:
-        """最近两轮之间的质量提升幅度。"""
-        if len(self.quality_trend) < 2:
-            return 0.0
-        prev = self.quality_trend[-2]
-        if prev == 0.0:
-            return 0.0
-        current = self.quality_trend[-1]
-        return (current - prev) / prev
+    def quality_improvement(self) -> None:
+        return None
+
+    @property
+    def round_over_round_improvement(self) -> None:
+        return None
+
+    @property
+    def severity_trend(self) -> list[float]:
+        return [r.avg_decision_severity for r in self.rounds]
+
+    @property
+    def pair_quality_heuristic_trend(self) -> list[float | None]:
+        return [r.avg_pair_quality_heuristic for r in self.rounds]
 
     def to_dict(self) -> dict:
         return {
+            "execution_mode": self.execution_mode.value,
             "current_round": self.current_round,
             "rounds": [r.to_dict() for r in self.rounds],
-            "quality_trend": [round(q, 4) for q in self.quality_trend],
+            "severity_trend": [_rounded(q) for q in self.severity_trend],
+            "pair_quality_heuristic_trend": [
+                _rounded(q) for q in self.pair_quality_heuristic_trend
+            ],
+            "quality_trend": [],
             "cumulative_dpo_pairs": self.cumulative_dpo_pairs,
-            "quality_improvement": round(self.quality_improvement, 4),
+            "quality_improvement": None,
+            "evaluation_status": "not_evaluated",
         }
 
     def save(self, path: Path) -> None:
-        """持久化飞轮状态。"""
         path.parent.mkdir(parents=True, exist_ok=True)
-        data = orjson.dumps(self.to_dict(), option=orjson.OPT_INDENT_2)
-        path.write_bytes(data)
+        path.write_bytes(orjson.dumps(self.to_dict(), option=orjson.OPT_INDENT_2))
 
     @classmethod
     def load(cls, path: Path) -> FlyWheelState:
-        """从文件恢复飞轮状态。"""
         if not path.exists():
             return cls()
         raw = orjson.loads(path.read_bytes())
-        state = cls()
+        if not isinstance(raw, dict):
+            raise ValueError("Flywheel state must be a JSON object")
+        state = cls(execution_mode=ExecutionMode(raw.get("execution_mode", "unknown")))
         state.current_round = raw.get("current_round", 0)
         state.cumulative_dpo_pairs = raw.get("cumulative_dpo_pairs", 0)
-        state.quality_trend = raw.get("quality_trend", [])
-        for r in raw.get("rounds", []):
-            state.rounds.append(RoundMetrics(**r))
+        for record in raw.get("rounds", []):
+            metrics = RoundMetrics.from_dict(record)
+            if metrics.execution_mode != state.execution_mode:
+                raise EcoAlignError("Flywheel state and round execution modes do not match")
+            state.rounds.append(metrics)
+        # Legacy quality_trend/improvement described severity; never load them
+        # as evidence of model quality or synthesize observations from them.
         return state
 
 
 class FlyWheelOrchestrator:
-    """数据飞轮编排器。
-
-    管理多轮迭代的生命周期：
-    1. 执行当前轮次的数据合成管道
-    2. 收集质量指标快照
-    3. 与前一轮对比，判断是否收敛
-    4. 记录迭代历史，输出质量提升曲线
-
-    注意：实际的模型训练步骤在框架外部完成（TRL/LLaMA-Factory），
-    FlyWheelOrchestrator 负责管理数据合成侧的迭代。
-    """
+    """Record synthesis rounds without claiming an unmeasured training loop."""
 
     def __init__(
         self,
         state_path: Path | None = None,
         convergence_threshold: float = 0.01,
         max_rounds: int = 10,
+        *,
+        execution_mode: ExecutionMode = ExecutionMode.UNKNOWN,
     ) -> None:
-        self._state_path = state_path or Path("./data/flywheel_state.json")
-        self.state = FlyWheelState.load(self._state_path)
+        self.execution_mode = ExecutionMode(execution_mode)
+        self._state_path = state_path or (
+            Path("./data") / self.execution_mode.value / "flywheel_state.json"
+        )
+        if self._state_path.exists():
+            self.state = FlyWheelState.load(self._state_path)
+            if self.state.execution_mode != self.execution_mode:
+                raise EcoAlignError("Existing flywheel execution mode does not match the new run")
+        else:
+            self.state = FlyWheelState(execution_mode=self.execution_mode)
+        # Retain the old argument for call compatibility; no heuristic threshold
+        # is used to decide whether an unmeasured model has converged.
         self.convergence_threshold = convergence_threshold
         self.max_rounds = max_rounds
 
     def record_round(self, metrics: RoundMetrics) -> None:
-        """记录一轮迭代结果。"""
         self.state.add_round(metrics)
         self.state.save(self._state_path)
         logger.info(
-            f"飞轮 Round {metrics.round_id} 完成: "
-            f"DPO pairs={metrics.total_dpo_pairs}, "
-            f"quality={metrics.avg_quality_score:.4f}, "
-            f"improvement={self.state.round_over_round_improvement:+.2%}"
+            "Recorded synthesis round %s (%s): %s DPO pairs; model quality not evaluated",
+            metrics.round_id,
+            metrics.execution_mode.value,
+            metrics.total_dpo_pairs,
         )
 
     @property
-    def has_converged(self) -> bool:
-        """判断飞轮是否已收敛（质量提升低于阈值）。"""
-        if len(self.state.quality_trend) < 2:
-            return False
-        return (
-            abs(self.state.round_over_round_improvement)
-            < self.convergence_threshold
-        )
+    def has_converged(self) -> None:
+        """Unknown until a separately defined independent evaluation is run."""
+        return None
 
     @property
     def should_continue(self) -> bool:
-        """判断是否应继续迭代。"""
-        if self.state.current_round >= self.max_rounds:
-            logger.info(f"已达最大轮次 {self.max_rounds}，停止迭代")
-            return False
-        if self.has_converged:
-            logger.info(
-                f"质量提升已收敛（{self.state.round_over_round_improvement:+.2%} "
-                f"< {self.convergence_threshold:+.2%}），停止迭代"
-            )
-            return False
-        return True
+        """Only the explicit round limit controls continuation in this Alpha."""
+        return self.state.current_round < self.max_rounds
 
     def get_summary(self) -> dict:
-        """生成飞轮摘要报告。"""
         return {
+            "execution_mode": self.execution_mode.value,
             "total_rounds": self.state.current_round,
             "cumulative_dpo_pairs": self.state.cumulative_dpo_pairs,
-            "quality_trend": self.state.quality_trend,
-            "total_improvement": f"{self.state.quality_improvement:+.2%}",
-            "converged": self.has_converged,
+            "severity_trend": self.state.severity_trend,
+            "pair_quality_heuristic_trend": self.state.pair_quality_heuristic_trend,
+            "quality_trend": [],
+            "total_improvement": None,
+            "converged": None,
+            "evaluation_status": "not_evaluated",
             "rounds_detail": [r.to_dict() for r in self.state.rounds],
         }

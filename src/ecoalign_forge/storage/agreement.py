@@ -110,9 +110,11 @@ def krippendorffs_alpha(
 
     # 距离函数
     if metric == "ordinal":
+
         def distance(a: str, b: str) -> float:
             return (_DECISION_ORDINAL.get(a, 0) - _DECISION_ORDINAL.get(b, 0)) ** 2
     else:
+
         def distance(a: str, b: str) -> float:
             return 0.0 if a == b else 1.0
 
@@ -166,7 +168,7 @@ def compute_batch_iaa(
     """计算一个批次的 IAA 指标。
 
     Args:
-        judge_evals: Judge 金标判决（与 cases 位置对齐）
+        judge_evals: Judge 机器判决（与 cases 位置对齐）
         persona_eval_sets: N 个 Moderator persona 的判决集合
 
     Returns:
@@ -175,18 +177,12 @@ def compute_batch_iaa(
     n_items = len(judge_evals)
 
     # 提取 Judge 决策序列（跳过 None 位置）
-    judge_decisions = [
-        e.final_decision if e is not None else None
-        for e in judge_evals
-    ]
+    judge_decisions = [e.final_decision if e is not None else None for e in judge_evals]
 
     # 每个 persona 计算 Cohen's Kappa
     kappa_per_persona: dict[str, float] = {}
     for idx, persona_evals in enumerate(persona_eval_sets):
-        persona_decisions = [
-            e.final_decision if e is not None else None
-            for e in persona_evals
-        ]
+        persona_decisions = [e.final_decision if e is not None else None for e in persona_evals]
         # 只取两者都有效的位置
         valid_pairs = [
             (j, p)
@@ -214,9 +210,7 @@ def compute_batch_iaa(
 
     alpha = krippendorffs_alpha(ratings_matrix, metric="ordinal")
     avg_kappa = (
-        sum(kappa_per_persona.values()) / len(kappa_per_persona)
-        if kappa_per_persona
-        else 0.0
+        sum(kappa_per_persona.values()) / len(kappa_per_persona) if kappa_per_persona else 0.0
     )
 
     return {

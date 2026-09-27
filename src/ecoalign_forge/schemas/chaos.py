@@ -36,18 +36,16 @@ class ChaosCase(BaseModel):
     """A boundary-testing case produced by the ChaosCreator agent."""
 
     case_id: str = Field(default_factory=lambda: str(uuid4()))
-    content: str = Field(
-        ..., min_length=1, description="The generated adversarial content"
+    request_item_id: str | None = Field(
+        default=None,
+        description="Local generation request ID; required for new generation, optional for history",
     )
+    content: str = Field(..., min_length=1, description="The generated adversarial content")
     attack_strategy: AttackStrategy = Field(..., description="Attack strategy used")
-    target_dimension: str = Field(
-        ..., min_length=1, description="Policy dimension being targeted"
-    )
+    target_dimension: str = Field(..., min_length=1, description="Policy dimension being targeted")
     difficulty: Difficulty = Field(default=Difficulty.MEDIUM)
     expected_action: ExpectedAction = Field(
-        ..., description="What a correct moderator SHOULD decide"
+        ..., description="Legacy generation hint; not a verified label or ground truth"
     )
-    reasoning: str = Field(
-        ..., min_length=1, description="ChaosCreator's intent explanation"
-    )
+    reasoning: str = Field(..., min_length=1, description="ChaosCreator's intent explanation")
     metadata: dict = Field(default_factory=dict)

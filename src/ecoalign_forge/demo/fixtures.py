@@ -3,7 +3,7 @@
 每组 fixture 模拟一个 batch_size=5 的管道运行：
 - 5 条 ChaosCase（红队生成的边界测试用例）
 - 5 条 Moderator JudgeEvaluation（初级审核的"弱"判决）
-- 5 条 SupremeJudge JudgeEvaluation（终审的"金标"判决）
+- 5 条 SupremeJudge JudgeEvaluation（终审的"机器"判决）
 
 数据设计要点：
 - 覆盖 T0/T1/T2/T3 四种档位
@@ -14,9 +14,7 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import random
 from typing import Any
 
 from ecoalign_forge.schemas.chaos import (
@@ -29,6 +27,8 @@ from ecoalign_forge.schemas.judge import JudgeEvaluation
 from ecoalign_forge.schemas.policy import PolicyInput
 
 logger = logging.getLogger(__name__)
+
+FIXTURE_VERSION = "iteration-a-1"
 
 # ──────────────────────────────────────────────────────────────
 # 预录制的 ChaosCase
@@ -125,7 +125,7 @@ _DEMO_MODERATOR_EVALS = [
 ]
 
 # ──────────────────────────────────────────────────────────────
-# 预录制的 SupremeJudge 判决（金标）
+# 预录制的 SupremeJudge 判决（机器）
 # ──────────────────────────────────────────────────────────────
 
 _DEMO_JUDGE_EVALS = [
@@ -207,9 +207,7 @@ def get_demo_cases(batch_size: int = 5) -> list[ChaosCase]:
     # 若请求更多，循环复用并修改 case_id
     while len(cases) < batch_size:
         base = _DEMO_CASES[len(cases) % len(_DEMO_CASES)]
-        cases.append(
-            base.model_copy(update={"case_id": f"demo-case-{len(cases)+1:03d}"})
-        )
+        cases.append(base.model_copy(update={"case_id": f"demo-case-{len(cases) + 1:03d}"}))
     return cases
 
 
@@ -236,7 +234,6 @@ async def demo_chaos_run(
 ) -> list[ChaosCase]:
     """模拟 ChaosCreator.run()，带延迟模拟真实 LLM 调用。"""
     logger.info("[ChaosCreator] (DEMO) Generating %d adversarial cases...", batch_size)
-    await asyncio.sleep(random.uniform(0.5, 1.0))
     return get_demo_cases(batch_size)
 
 
@@ -247,7 +244,6 @@ async def demo_moderator_run(
 ) -> list[JudgeEvaluation | None]:
     """模拟 Moderator.run()。"""
     logger.info("[Moderator] (DEMO) Reviewing %d cases as naive junior reviewer...", len(cases))
-    await asyncio.sleep(random.uniform(0.3, 0.8))
     return get_demo_moderator_evals(len(cases))
 
 
@@ -259,7 +255,11 @@ async def demo_judge_run(
 ) -> tuple[list[JudgeEvaluation | None], list]:
     """模拟 SupremeJudge.run()。返回 judge_evals + 空 dpo_pairs（由 orchestrator 重建）。"""
     logger.info("[SupremeJudge] (DEMO) Judging %d cases with guidelines...", len(cases))
-    await asyncio.sleep(random.uniform(0.3, 0.8))
     evals = get_demo_judge_evals(len(cases))
     # 返回空 dpo_pairs，让 orchestrator 用 build_dpo_pairs_multi_persona 正常构建
     return evals, []
+
+
+async def demo_judge_evaluate(cases: list[ChaosCase]) -> list[JudgeEvaluation | None]:
+    """Offline fixture replacement for SupremeJudge.evaluate."""
+    return get_demo_judge_evals(len(cases))

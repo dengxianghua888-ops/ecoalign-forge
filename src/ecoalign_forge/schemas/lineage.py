@@ -11,28 +11,28 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
+from ecoalign_forge.schemas.execution import ExecutionMode
+
 
 class DataLineage(BaseModel):
     """DPO 数据血缘追踪。"""
 
+    execution_mode: ExecutionMode = ExecutionMode.UNKNOWN
+    fixture_version: str | None = None
+    review_status: str = "skipped"
+
     # 策略溯源
     source_policy_id: str = Field(..., description="策略 ID")
-    source_policy_version: str = Field(
-        default="v1", description="策略版本号"
-    )
+    source_policy_version: str = Field(default="v1", description="策略版本号")
 
     # 模型溯源
-    chaos_model: str = Field(..., description="ChaosCreator 使用的 LLM 模型")
-    moderator_model: str = Field(..., description="Moderator 使用的 LLM 模型")
-    judge_model: str = Field(..., description="SupremeJudge 使用的 LLM 模型")
+    chaos_model: str | None = Field(default=None, description="ChaosCreator 使用的 LLM 模型")
+    moderator_model: str | None = Field(default=None, description="Moderator 使用的 LLM 模型")
+    judge_model: str | None = Field(default=None, description="SupremeJudge 使用的 LLM 模型")
 
     # 审核配置溯源
-    moderator_persona: str = Field(
-        default="naive", description="Moderator 的 persona 类型"
-    )
-    guidelines_hash: str = Field(
-        ..., description="guidelines.md 内容的 SHA-256 哈希（前 12 位）"
-    )
+    moderator_persona: str = Field(default="naive", description="Moderator 的 persona 类型")
+    guidelines_hash: str = Field(..., description="guidelines.md 内容的 SHA-256 哈希（前 12 位）")
 
     # 管道溯源
     pipeline_run_id: str = Field(..., description="管道运行 ID")

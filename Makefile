@@ -10,7 +10,7 @@ run: ## Run quickstart example
 	python examples/quickstart.py
 
 dashboard: ## Start Streamlit dashboard
-	streamlit run dashboard/app.py --server.port 8501
+	python -m streamlit run dashboard/app.py --server.port 8501
 
 test: ## Run tests
 	pytest tests/ -v --cov=ecoalign_forge --cov-report=term-missing

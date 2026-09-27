@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EcoAlign-Forge Demo Dataset — 质量报告</title>
+<title>EcoAlign-Forge recorded demo — 合成数据诊断</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #1f2329; line-height: 1.6; padding: 24px; }
@@ -33,45 +33,59 @@ tr:hover td { background: #fafbfc; }
 </head>
 <body>
 <div class="container">
-<h1>EcoAlign-Forge Demo Dataset</h1>
-<p class="subtitle">数据质量报告 · 生成时间 2026-04-11 08:15 UTC · by EcoAlign-Forge</p>
+<h1>EcoAlign-Forge recorded demo</h1>
+<p class="subtitle">合成数据诊断 · 生成时间 2026-09-27 11:55 UTC · by EcoAlign-Forge</p>
+<div class="section">
+<p>来源模式：<strong>demo</strong> · run_id：d75146d9-5a2c-4ab0-968d-60b0530bcb99 · fixture：iteration-a-1</p>
+<p>预录演示数据，不代表真实模型执行。</p>
+<p>严重度表示判决档位；启发式分数和模型间一致性均不代表标签正确率。下游模型效果尚未评估。</p>
+</div>
 
 <div class="kpi-grid">
-<div class="kpi-card"><div class="kpi-value">347</div><div class="kpi-label">DPO 偏好对总数</div></div>
-<div class="kpi-card"><div class="kpi-value">0.78</div><div class="kpi-label">平均质量分</div></div>
-<div class="kpi-card"><div class="kpi-value">0.62</div><div class="kpi-label">平均偏好差距</div></div>
-<div class="kpi-card"><div class="kpi-value">42.0%</div><div class="kpi-label">拦截率 (T0+T1)</div></div>
+<div class="kpi-card"><div class="kpi-value">3</div><div class="kpi-label">DPO 偏好对总数</div></div>
+<div class="kpi-card"><div class="kpi-value">0.40</div><div class="kpi-label">平均判决严重度</div></div>
+<div class="kpi-card"><div class="kpi-value">0.79</div><div class="kpi-label">平均偏好对启发式分数</div></div>
+<div class="kpi-card"><div class="kpi-value">0.47</div><div class="kpi-label">平均偏好差距</div></div>
+<div class="kpi-card"><div class="kpi-value">40.0%</div><div class="kpi-label">拦截率 (T0+T1)</div></div>
 </div>
 
 <div class="section">
 <h2>决策分布</h2>
 <table><tr><th>档位</th><th>数量</th><th>占比</th><th>分布</th></tr><tr>
 <td><span class="badge badge-red">T0_Block</span></td>
-<td>58</td>
-<td>16.7%</td>
-<td><div class="progress-bar"><div class="progress-fill" style="width:16.714697406340058%;background:#d25d5a"></div></div></td>
+<td>1</td>
+<td>20.0%</td>
+<td><div class="progress-bar"><div class="progress-fill" style="width:20.0%;background:#d25d5a"></div></div></td>
 </tr><tr>
 <td><span class="badge badge-yellow">T1_Shadowban</span></td>
-<td>89</td>
-<td>25.6%</td>
-<td><div class="progress-bar"><div class="progress-fill" style="width:25.64841498559078%;background:#d4b45b"></div></div></td>
+<td>1</td>
+<td>20.0%</td>
+<td><div class="progress-bar"><div class="progress-fill" style="width:20.0%;background:#d4b45b"></div></div></td>
 </tr><tr>
 <td><span class="badge badge-blue">T2_Normal</span></td>
-<td>128</td>
-<td>36.9%</td>
-<td><div class="progress-bar"><div class="progress-fill" style="width:36.887608069164266%;background:#5178c6"></div></div></td>
+<td>1</td>
+<td>20.0%</td>
+<td><div class="progress-bar"><div class="progress-fill" style="width:20.0%;background:#5178c6"></div></div></td>
 </tr><tr>
 <td><span class="badge badge-green">T3_Recommend</span></td>
-<td>72</td>
-<td>20.7%</td>
-<td><div class="progress-bar"><div class="progress-fill" style="width:20.7492795389049%;background:#509863"></div></div></td>
+<td>2</td>
+<td>40.0%</td>
+<td><div class="progress-bar"><div class="progress-fill" style="width:40.0%;background:#509863"></div></div></td>
 </tr></table>
 </div>
 
 <div class="section">
-<h2>质量分数分布</h2>
+<h2>判决严重度分布</h2>
+<p>本图包含 5 个观测值；与偏好对总数的分母可能不同。此分布不是正确率。</p>
 <div class="chart-container">
-<svg width="400" height="180" viewBox="0 0 400 180"><rect x="30" y="150.0" width="60" height="0.0" fill="#d25d5a" rx="4"/><text x="60.0" y="145.0" text-anchor="middle" font-size="12" fill="#333">0</text><text x="60.0" y="170" text-anchor="middle" font-size="11" fill="#999">0-0.2</text><rect x="102" y="137.0" width="60" height="13.0" fill="#d4b45b" rx="4"/><text x="132.0" y="132.0" text-anchor="middle" font-size="12" fill="#333">1</text><text x="132.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.2-0.4</text><rect x="174" y="111.0" width="60" height="39.0" fill="#5178c6" rx="4"/><text x="204.0" y="106.0" text-anchor="middle" font-size="12" fill="#333">3</text><text x="204.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.4-0.6</text><rect x="246" y="20.0" width="60" height="130.0" fill="#509863" rx="4"/><text x="276.0" y="15.0" text-anchor="middle" font-size="12" fill="#333">10</text><text x="276.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.6-0.8</text><rect x="318" y="72.0" width="60" height="78.0" fill="#509863" rx="4"/><text x="348.0" y="67.0" text-anchor="middle" font-size="12" fill="#333">6</text><text x="348.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.8-1.0</text></svg>
+<svg width="400" height="180" viewBox="0 0 400 180"><rect x="30" y="20.0" width="60" height="130.0" fill="#5178c6" rx="4"/><text x="60.0" y="15.0" text-anchor="middle" font-size="12" fill="#333">2</text><text x="60.0" y="170" text-anchor="middle" font-size="11" fill="#999">0-0.2</text><rect x="102" y="85.0" width="60" height="65.0" fill="#5178c6" rx="4"/><text x="132.0" y="80.0" text-anchor="middle" font-size="12" fill="#333">1</text><text x="132.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.2-0.4</text><rect x="174" y="150.0" width="60" height="0.0" fill="#5178c6" rx="4"/><text x="204.0" y="145.0" text-anchor="middle" font-size="12" fill="#333">0</text><text x="204.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.4-0.6</text><rect x="246" y="85.0" width="60" height="65.0" fill="#5178c6" rx="4"/><text x="276.0" y="80.0" text-anchor="middle" font-size="12" fill="#333">1</text><text x="276.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.6-0.8</text><rect x="318" y="85.0" width="60" height="65.0" fill="#5178c6" rx="4"/><text x="348.0" y="80.0" text-anchor="middle" font-size="12" fill="#333">1</text><text x="348.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.8-1.0</text></svg>
+</div>
+</div>
+<div class="section">
+<h2>偏好对启发式分布</h2>
+<p>本图包含 3 个观测值；与偏好对总数的分母可能不同。此分布不是正确率。</p>
+<div class="chart-container">
+<svg width="400" height="180" viewBox="0 0 400 180"><rect x="30" y="150.0" width="60" height="0.0" fill="#5178c6" rx="4"/><text x="60.0" y="145.0" text-anchor="middle" font-size="12" fill="#333">0</text><text x="60.0" y="170" text-anchor="middle" font-size="11" fill="#999">0-0.2</text><rect x="102" y="150.0" width="60" height="0.0" fill="#5178c6" rx="4"/><text x="132.0" y="145.0" text-anchor="middle" font-size="12" fill="#333">0</text><text x="132.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.2-0.4</text><rect x="174" y="150.0" width="60" height="0.0" fill="#5178c6" rx="4"/><text x="204.0" y="145.0" text-anchor="middle" font-size="12" fill="#333">0</text><text x="204.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.4-0.6</text><rect x="246" y="20.0" width="60" height="130.0" fill="#5178c6" rx="4"/><text x="276.0" y="15.0" text-anchor="middle" font-size="12" fill="#333">2</text><text x="276.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.6-0.8</text><rect x="318" y="85.0" width="60" height="65.0" fill="#5178c6" rx="4"/><text x="348.0" y="80.0" text-anchor="middle" font-size="12" fill="#333">1</text><text x="348.0" y="170" text-anchor="middle" font-size="11" fill="#999">0.8-1.0</text></svg>
 </div>
 </div>
 
@@ -79,50 +93,35 @@ tr:hover td { background: #fafbfc; }
 <h2>维度拦截率</h2>
 <table><tr><th>维度</th><th>总数</th><th>拦截数</th><th>拦截率</th></tr><tr>
 <td>stealth_marketing</td>
-<td>180</td>
-<td>98</td>
-<td><span class="badge badge-yellow">54.4%</span></td>
+<td>3</td>
+<td>2</td>
+<td><span class="badge badge-red">66.7%</span></td>
 </tr><tr>
 <td>ai_slop</td>
-<td>167</td>
-<td>49</td>
-<td><span class="badge badge-green">29.3%</span></td>
+<td>2</td>
+<td>0</td>
+<td><span class="badge badge-green">0.0%</span></td>
 </tr></table>
 </div>
 
 <div class="section">
 <h2>规则覆盖率</h2>
-<p>覆盖率: <strong>12/12 (100%)</strong></p>
-<table><tr><th>规则编号</th><th>命中次数</th><th>状态</th></tr><tr><td>A-001</td><td>45</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>A-002</td><td>38</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>A-003</td><td>22</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>A-004</td><td>15</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>A-005</td><td>8</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>A-006</td><td>12</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-001</td><td>67</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-002</td><td>34</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-003</td><td>28</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-004</td><td>19</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-005</td><td>41</td><td><span class="badge badge-green">已覆盖</span></td></tr><tr><td>B-006</td><td>5</td><td><span class="badge badge-green">已覆盖</span></td></tr></table>
+<p>暂无规则覆盖数据</p>
 </div>
 
+
 <div class="section">
-<h2>标注者一致性 (IAA)</h2>
+<h2>飞轮合成记录</h2>
 <div class="kpi-grid">
-<div class="kpi-card"><div class="kpi-value" style="color:#509863">0.640</div><div class="kpi-label">Cohen's Kappa (平均)</div></div>
-<div class="kpi-card"><div class="kpi-value" style="color:#d4b45b">0.580</div><div class="kpi-label">Krippendorff's Alpha</div></div>
-<div class="kpi-card"><div class="kpi-value">✅ 高</div><div class="kpi-label">置信度</div></div>
+<div class="kpi-card"><div class="kpi-value">1</div><div class="kpi-label">记录轮次</div></div>
+<div class="kpi-card"><div class="kpi-value">3</div><div class="kpi-label">累计 DPO 对</div></div>
+<div class="kpi-card"><div class="kpi-value">未评估</div><div class="kpi-label">模型质量提升</div></div>
+<div class="kpi-card"><div class="kpi-value">未评估</div><div class="kpi-label">训练收敛</div></div>
 </div>
-</div>
-<div class="section">
-<h2>数据飞轮迭代</h2>
-<div class="kpi-grid">
-<div class="kpi-card"><div class="kpi-value">4</div><div class="kpi-label">迭代轮次</div></div>
-<div class="kpi-card"><div class="kpi-value">1247</div><div class="kpi-label">累计 DPO 对</div></div>
-<div class="kpi-card"><div class="kpi-value">+50.0%</div><div class="kpi-label">质量提升</div></div>
-</div>
-<div class="chart-container">
-<svg width="500" height="150" viewBox="0 0 500 150">
-<polyline points="40.0,56.66666666666667 186.66666666666666,43.97435897435898 333.3333333333333,28.461538461538467 480.0,20.0" fill="none" stroke="#5178c6" stroke-width="2"/>
-<circle cx="40.0" cy="56.66666666666667" r="4" fill="#5178c6"/><circle cx="186.66666666666666" cy="43.97435897435898" r="4" fill="#5178c6"/><circle cx="333.3333333333333" cy="28.461538461538467" r="4" fill="#5178c6"/><circle cx="480.0" cy="20.0" r="4" fill="#5178c6"/>
-<text x="20" y="145" font-size="11" fill="#999">Round 1</text>
-<text x="440" y="145" font-size="11" fill="#999">Round 4</text>
-</svg>
-<p style="color:#646a73;font-size:13px">质量趋势（每轮平均质量分）</p>
-</div>
+<p>合成轮次、严重度变化或启发式分数变化不能证明模型效果改善；历史提升与收敛字段不用于评估。</p>
 </div>
 
-<p class="footer">Generated by EcoAlign-Forge · Multi-Agent DPO Data Synthesis Factory</p>
+<p class="footer">Generated by EcoAlign-Forge · Experimental preference-data pipeline</p>
 </div>
 </body>
 </html>

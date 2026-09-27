@@ -3,7 +3,7 @@
 迁移到内容分发分级 ontology 后职责变化：
 - 不再生成"violence/sexual"安全审核类对抗内容
 - 改为按目标 tier（T0/T1/T2/T3）和触发的策略组合（A、B、A+B、none）生成真实 UGC
-- 每条用例的 ground truth 存进 `metadata['ground_truth']`，供后续评估使用
+- 本地生成目标保存在 `metadata['generation_target']`，不作为正确标签或评估真值
 """
 
 from __future__ import annotations
@@ -11,7 +11,10 @@ from __future__ import annotations
 import json
 import math
 import random
+from collections import Counter
+from functools import partial
 from typing import Any
+from uuid import uuid4
 
 from pydantic import ValidationError
 
@@ -30,11 +33,11 @@ DEFAULT_TARGET_DISTRIBUTION: dict[str, float] = {
     "T3_Recommend": 0.25,
 }
 
-# 每个 tier 的"应触发策略组合"，用于 prompt 指导和 ground_truth 标注
+# 每个 tier 的目标策略组合，仅用于生成意图，不是经验证的标签
 _TIER_TO_STRATEGIES: dict[str, dict[str, bool]] = {
-    "T0_Block":     {"has_stealth_marketing": True,  "is_ai_slop": True},
-    "T1_Shadowban": {"has_stealth_marketing": True,  "is_ai_slop": False},
-    "T2_Normal":    {"has_stealth_marketing": False, "is_ai_slop": True},
+    "T0_Block": {"has_stealth_marketing": True, "is_ai_slop": True},
+    "T1_Shadowban": {"has_stealth_marketing": True, "is_ai_slop": False},
+    "T2_Normal": {"has_stealth_marketing": False, "is_ai_slop": True},
     "T3_Recommend": {"has_stealth_marketing": False, "is_ai_slop": False},
 }
 
@@ -59,50 +62,62 @@ class ChaosCreator(BaseAgent):
             target_distribution: 目标 tier 分布字典，key 为 final_decision，
                 value 为占比（自动归一化）。默认 T0:15% / T1:30% / T2:30% / T3:25%
         """
-        distribution = target_distribution or DEFAULT_TARGET_DISTRIBUTION
-        targets = self._sample_targets(batch_size, distribution)
-        breakdown = self._format_target_breakdown(targets)
-        self._log(
-            f"Generating {batch_size} cases with target distribution: {breakdown}"
+        policy.validate_supported()
+        distribution = (
+            DEFAULT_TARGET_DISTRIBUTION if target_distribution is None else target_distribution
         )
+        targets = self._sample_targets(batch_size, distribution)
+        # ID、目标和 prompt 在调用前固定，解析重试必须复用同一份请求契约。
+        request_targets = {str(uuid4()): target for target in targets}
+        breakdown = self._format_target_breakdown(targets)
+        self._log(f"Generating {batch_size} cases with target distribution: {breakdown}")
 
-        user_prompt = self._build_user_prompt(policy, batch_size, targets)
+        user_prompt = self._build_user_prompt(policy, request_targets)
 
         cases = await self.llm.generate_validated(
             messages=[
                 {"role": "system", "content": CHAOS_CREATOR_SYSTEM},
                 {"role": "user", "content": user_prompt},
             ],
-            parser=self._parse_cases,
+            parser=partial(
+                self._parse_cases,
+                request_targets=request_targets,
+                allowed_dimensions={dimension.name for dimension in policy.dimensions},
+            ),
             model=self.model,
             temperature=0.9,
         )
-
-        # 把目标 tier 与策略组合作为 hidden ground truth 写入 metadata
-        # （只存不用，供后续 evaluation / 路径 3 的 active learning 复用）
-        self._stamp_ground_truth(cases, targets)
 
         self._log(f"Generated {len(cases)} cases successfully")
         return cases
 
     @staticmethod
-    def _sample_targets(
-        batch_size: int, distribution: dict[str, float]
-    ) -> list[str]:
+    def _sample_targets(batch_size: int, distribution: dict[str, float]) -> list[str]:
         """按目标分布采样 batch_size 个目标 tier。
 
-        采样逻辑：先按比例向下取整分配，剩余名额按比例随机补足，保证总和 = batch_size
+        采样逻辑：先按比例向下取整分配，剩余名额按小数部分补足，保证总和 = batch_size
         且分布尽量接近输入比例。
         """
+        if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        if not distribution or set(distribution) - set(_TIER_TO_STRATEGIES):
+            raise ValueError("target_distribution must contain only supported T0/T1/T2/T3 tiers")
+        if any(
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 0
+            for value in distribution.values()
+        ):
+            raise ValueError("target_distribution weights must be finite non-negative numbers")
         # 归一化（容忍输入是 1 不到或超 1）
         total = sum(distribution.values())
-        if total <= 0:
+        if not math.isfinite(total) or total <= 0:
             raise ValueError(f"target_distribution 总和必须 > 0: {distribution}")
         normalized = {k: v / total for k, v in distribution.items()}
 
         counts: dict[str, int] = {
-            tier: math.floor(ratio * batch_size)
-            for tier, ratio in normalized.items()
+            tier: math.floor(ratio * batch_size) for tier, ratio in normalized.items()
         }
         # 处理整除剩余的名额
         remainder = batch_size - sum(counts.values())
@@ -128,22 +143,36 @@ class ChaosCreator(BaseAgent):
 
     @staticmethod
     def _format_target_breakdown(targets: list[str]) -> str:
-        from collections import Counter
         c = Counter(targets)
         return ", ".join(f"{k}={v}" for k, v in sorted(c.items()))
 
     @staticmethod
     def _build_user_prompt(
         policy: PolicyInput,
-        batch_size: int,
-        targets: list[str],
+        request_targets: dict[str, str],
     ) -> str:
-        from collections import Counter
-        target_counts = Counter(targets)
-        target_lines = "\n".join(
-            f"- 目标 {tier}（应触发策略组合：A={_TIER_TO_STRATEGIES[tier]['has_stealth_marketing']}，"
-            f"B={_TIER_TO_STRATEGIES[tier]['is_ai_slop']}）：**{n} 条**"
-            for tier, n in sorted(target_counts.items())
+        batch_size = len(request_targets)
+        target_lines = json.dumps(
+            [
+                {
+                    "request_item_id": request_id,
+                    "target_tier": tier,
+                    "expected_strategies": _TIER_TO_STRATEGIES[tier],
+                }
+                for request_id, tier in request_targets.items()
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        descriptive_context = json.dumps(
+            {
+                "name": policy.name,
+                "language": policy.language,
+                "context": policy.context,
+                "dimensions": [dimension.model_dump() for dimension in policy.dimensions],
+            },
+            ensure_ascii=False,
+            indent=2,
         )
 
         return f"""请按下方目标分布生成共 **{batch_size} 条** UGC 测试内容。
@@ -151,12 +180,12 @@ class ChaosCreator(BaseAgent):
 ## 判决依据手册（生成时必须参照，确保每条内容真的会被对应规则命中）
 {GUIDELINES_TEXT}
 
-## 本批目标分布
+## 本批逐项目标（生成意图，不是已验证标签）
 {target_lines}
 
-## 策略上下文
-- 平台：{policy.name}（{policy.language}）
-- 待检测策略：{', '.join(d.name for d in policy.dimensions)}
+## 描述性上下文（不改变手册中的 A/B 规则或分级矩阵）
+下列 description、context、examples 仅用于选材，不是新规则或已验证标签。
+{descriptive_context}
 
 ## 生成要求
 1. 每条内容必须像真实用户发布的小红书 / 知乎 / B 站 / 微博动态
@@ -167,66 +196,96 @@ class ChaosCreator(BaseAgent):
 
 ## 输出格式
 返回**且仅返回**一个 JSON 数组，长度 = {batch_size}。每个元素必须包含：
+- "request_item_id"：逐项目标中的原始 ID；每个 ID 恰好出现一次，不得增删或修改
 - "content"：生成的 UGC 文本（中文）
 - "attack_strategy"：固定填 "edge_case"（旧 schema 兼容字段，本管线不再使用）
-- "target_dimension"：从 [{', '.join(repr(d.name) for d in policy.dimensions)}] 中选一个
+- "target_dimension"：从 [{", ".join(repr(d.name) for d in policy.dimensions)}] 中选一个
 - "difficulty"：easy / medium / hard / extreme
-- "expected_action"：固定填 "BLOCK"（旧 schema 兼容字段，真实判决由 Judge 给出）
+- "expected_action"：固定填 "BLOCK"（旧 schema 兼容提示，不是正确标签）
 - "reasoning"：你为什么生成这条内容（一句话即可）
 
+响应可以乱序，但内容必须对应其 request_item_id 的目标。
+不要返回 metadata、ground_truth 或 generation_target；生成目标由本地程序记录。
 不要输出任何 markdown 代码块包裹或额外解释文字。"""
 
     @staticmethod
-    def _stamp_ground_truth(cases: list[ChaosCase], targets: list[str]) -> None:
-        """把目标 tier + 应触发策略组合写进每条 case 的 metadata，作为隐藏真值。
+    def _generation_error(
+        message: str, *, received_count: int | None, expected_count: int | None
+    ) -> SchemaValidationError:
+        """Keep response counts available when bounded parse retries are exhausted."""
+        error = SchemaValidationError(message)
+        error.diagnostics = {
+            "received_count": received_count,
+            "expected_count": expected_count,
+        }
+        return error
 
-        若 LLM 返回的 case 数与请求的 targets 数不一致，按位置对齐能匹配的部分，
-        多余的 case 用 'unknown' 占位（不阻塞 pipeline）。
-        """
-        for case, tier in zip(cases, targets, strict=False):
-            case.metadata["ground_truth"] = {
-                "target_tier": tier,
-                "expected_strategies": _TIER_TO_STRATEGIES[tier],
-            }
-        # 多余的 case（罕见）标记为未知 ground truth
-        for case in cases[len(targets):]:
-            case.metadata["ground_truth"] = {
-                "target_tier": "unknown",
-                "expected_strategies": {},
-            }
-
-    def _parse_cases(self, raw: str) -> list[ChaosCase]:
+    def _parse_cases(
+        self,
+        raw: str,
+        *,
+        request_targets: dict[str, str] | None = None,
+        allowed_dimensions: set[str] | None = None,
+    ) -> list[ChaosCase]:
         """严格解析 LLM JSON 响应 → ChaosCase 列表。
 
         与上一版相同的强校验语义：任意一条 Pydantic 校验失败立即抛
         SchemaValidationError，触发 LLMClient.generate_validated 重新发起 LLM 调用。
         """
+        expected_count = len(request_targets) if request_targets is not None else None
+        fail = partial(self._generation_error, expected_count=expected_count)
         json_text = self._extract_json(raw, mode="array")
         try:
             data = json.loads(json_text)
         except json.JSONDecodeError as e:
-            raise SchemaValidationError(
-                f"LLM 输出无法解析为有效 JSON: {e}"
-            ) from e
+            raise fail(f"LLM 输出无法解析为有效 JSON: {e}", received_count=None) from e
 
         if not isinstance(data, list):
-            raise SchemaValidationError(
-                f"LLM 输出顶层不是 JSON 数组: 实际类型 {type(data).__name__}"
+            raise fail(
+                f"LLM 输出顶层不是 JSON 数组: 实际类型 {type(data).__name__}",
+                received_count=None,
             )
+        fail = partial(fail, received_count=len(data))
         if not data:
-            raise SchemaValidationError("LLM 输出是空数组，未生成任何用例")
+            raise fail("LLM 输出是空数组，未生成任何用例")
+        if expected_count is not None and len(data) != expected_count:
+            raise fail(f"用例数量不匹配: expected={expected_count}, received={len(data)}")
 
         cases: list[ChaosCase] = []
+        seen_ids: set[str] = set()
         for idx, item in enumerate(data):
             if not isinstance(item, dict):
-                raise SchemaValidationError(
-                    f"第 {idx} 条用例不是 JSON 对象: {item!r}"
-                )
+                raise fail(f"第 {idx} 条用例不是 JSON 对象")
+            if request_targets is not None:
+                request_id = item.get("request_item_id")
+                if not isinstance(request_id, str) or not request_id:
+                    raise fail(f"第 {idx} 条用例缺少有效 request_item_id")
+                if request_id not in request_targets:
+                    raise fail(f"第 {idx} 条用例包含未知 request_item_id: {request_id}")
+                if request_id in seen_ids:
+                    raise fail(f"重复 request_item_id: {request_id}")
+                seen_ids.add(request_id)
             try:
-                cases.append(ChaosCase(**item))
+                case = ChaosCase(**item)
             except ValidationError as e:
-                raise SchemaValidationError(
-                    f"第 {idx} 条用例不符合 ChaosCase Schema: {e}"
-                ) from e
+                raise fail(f"第 {idx} 条用例不符合 ChaosCase Schema: {e}") from e
+            if allowed_dimensions is not None and case.target_dimension not in allowed_dimensions:
+                raise fail(f"第 {idx} 条用例的 target_dimension 不在请求策略中")
+            cases.append(case)
+
+        if request_targets is not None:
+            # Complete cardinality + unique known IDs imply the exact requested set.
+            by_id = {case.request_item_id: case for case in cases}
+            cases = [by_id[request_id] for request_id in request_targets]
+            for case in cases:
+                # Case identity is local, too; model-supplied duplicate IDs cannot merge cases.
+                case.case_id = case.request_item_id
+                tier = request_targets[case.request_item_id]
+                case.metadata.pop("ground_truth", None)
+                case.metadata["generation_target"] = {
+                    "request_item_id": case.request_item_id,
+                    "target_tier": tier,
+                    "expected_strategies": dict(_TIER_TO_STRATEGIES[tier]),
+                }
 
         return cases

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from ecoalign_forge.schemas.chaos import ChaosCase
 from ecoalign_forge.schemas.dpo import DPO_Pair
+from ecoalign_forge.schemas.execution import ExecutionMode
 from ecoalign_forge.schemas.judge import JudgeEvaluation
+from ecoalign_forge.schemas.lineage import DataLineage
 from ecoalign_forge.storage.dashboard_bridge import DashboardBridge, DashboardSnapshot
 from ecoalign_forge.storage.metrics import MetricsCollector
 
@@ -46,11 +49,7 @@ def _make_evaluation(
     return JudgeEvaluation(
         has_stealth_marketing=has_stealth,
         is_ai_slop=has_slop,
-        reasoning_trace=(
-            f"第一步：观察到测试特征\n"
-            f"第二步：{cite}\n"
-            f"第三步：定级 {decision}"
-        ),
+        reasoning_trace=(f"第一步：观察到测试特征\n第二步：{cite}\n第三步：定级 {decision}"),
         final_decision=decision,  # type: ignore[arg-type]
     )
 
@@ -63,10 +62,15 @@ def _make_response(decision: str = "T2_Normal") -> JudgeEvaluation:
 
 def _make_dpo_pair() -> DPO_Pair:
     return DPO_Pair(
-        prompt="p", chosen="c", rejected="r",
-        chosen_score=0.9, rejected_score=0.3,
-        preference_gap=0.6, dimension="stealth_marketing",
-        difficulty="medium", source_case_id="case-1",
+        prompt="p",
+        chosen="c",
+        rejected="r",
+        chosen_score=0.9,
+        rejected_score=0.3,
+        preference_gap=0.6,
+        dimension="stealth_marketing",
+        difficulty="medium",
+        source_case_id="case-1",
     )
 
 
@@ -76,10 +80,13 @@ class TestMetricsCollector:
     def test_empty_metrics(self) -> None:
         """空状态返回零值"""
         mc = MetricsCollector()
-        assert mc.avg_quality_score == 0.0
+        assert mc.avg_decision_severity == 0.0
         assert mc.interception_rate == 0.0
         assert mc.decision_counts == {
-            "T0_Block": 0, "T1_Shadowban": 0, "T2_Normal": 0, "T3_Recommend": 0
+            "T0_Block": 0,
+            "T1_Shadowban": 0,
+            "T2_Normal": 0,
+            "T3_Recommend": 0,
         }
         assert mc.dimension_stats == {}
 
@@ -98,7 +105,7 @@ class TestMetricsCollector:
         assert mc.decision_counts["T2_Normal"] == 0
         assert mc.total_pairs == 1
         # T1_Shadowban 严重度 = 0.7
-        assert abs(mc.avg_quality_score - 0.7) < 1e-9
+        assert abs(mc.avg_decision_severity - 0.7) < 1e-9
         assert mc.interception_rate == 1.0
         assert mc.stealth_hits == 1
         assert mc.slop_hits == 0
@@ -196,9 +203,7 @@ class TestMetricsCollector:
         """批次时间线记录"""
         mc = MetricsCollector()
         case = _make_case()
-        mc.record_batch(
-            [case], [_make_response()], [_make_evaluation()], [_make_dpo_pair()]
-        )
+        mc.record_batch([case], [_make_response()], [_make_evaluation()], [_make_dpo_pair()])
 
         assert len(mc.batch_timestamps) == 1
         ts = mc.batch_timestamps[0]
@@ -221,7 +226,10 @@ class TestMetricsCollector:
         mc.record_batch(cases, resps, evs, [])
 
         assert mc.decision_counts == {
-            "T0_Block": 1, "T1_Shadowban": 1, "T2_Normal": 1, "T3_Recommend": 1
+            "T0_Block": 1,
+            "T1_Shadowban": 1,
+            "T2_Normal": 1,
+            "T3_Recommend": 1,
         }
         # 拦截率 = (T0 + T1) / 4 = 0.5
         assert abs(mc.interception_rate - 0.5) < 1e-9
@@ -232,8 +240,8 @@ class TestMetricsCollector:
         c1 = _make_case(dimension="stealth_marketing")
         c2 = _make_case(dimension="ai_slop")
         evs = [
-            _make_evaluation(decision="T0_Block"),    # 拦截
-            _make_evaluation(decision="T2_Normal"),   # 不拦截
+            _make_evaluation(decision="T0_Block"),  # 拦截
+            _make_evaluation(decision="T2_Normal"),  # 不拦截
         ]
 
         mc.record_batch([c1, c2], [_make_response(), _make_response()], evs, [])
@@ -252,9 +260,7 @@ class TestMetricsCollector:
         """to_dict 导出所有字段"""
         mc = MetricsCollector()
         case = _make_case()
-        mc.record_batch(
-            [case], [_make_response()], [_make_evaluation()], [_make_dpo_pair()]
-        )
+        mc.record_batch([case], [_make_response()], [_make_evaluation()], [_make_dpo_pair()])
 
         d = mc.to_dict()
         assert "severity_scores" in d
@@ -271,7 +277,9 @@ class TestMetricsCollector:
         mc = MetricsCollector()
         case = _make_case()
         mc.record_batch(
-            [case], [_make_response()], [_make_evaluation()],
+            [case],
+            [_make_response()],
+            [_make_evaluation()],
             [_make_dpo_pair(), _make_dpo_pair()],
         )
 
@@ -280,7 +288,7 @@ class TestMetricsCollector:
         assert path.exists()
 
         loaded = MetricsCollector.load(path)
-        assert loaded.avg_quality_score == mc.avg_quality_score
+        assert loaded.avg_decision_severity == mc.avg_decision_severity
         assert loaded.decision_counts == mc.decision_counts
         assert loaded.moderator_decision_counts == mc.moderator_decision_counts
         assert loaded.total_pairs == 2
@@ -292,13 +300,103 @@ class TestMetricsCollector:
         for _ in range(3):
             case = _make_case()
             mc.record_batch(
-                [case], [_make_response()],
-                [_make_evaluation(decision="T0_Block")], [_make_dpo_pair()],
+                [case],
+                [_make_response()],
+                [_make_evaluation(decision="T0_Block")],
+                [_make_dpo_pair()],
             )
 
         assert mc.decision_counts["T0_Block"] == 3
         assert mc.total_pairs == 3
         assert len(mc.batch_timestamps) == 3
+
+    def test_heuristic_is_independent_of_severity(self) -> None:
+        mc = MetricsCollector(execution_mode=ExecutionMode.MOCK, run_id="mock-run")
+        assert mc.avg_pair_quality_heuristic is None
+        pair = _make_dpo_pair()
+        pair.lineage = DataLineage(
+            source_policy_id="default-v1",
+            guidelines_hash="rules",
+            pipeline_run_id="mock-run",
+            execution_mode=ExecutionMode.MOCK,
+            quality_scores={"overall": 0.2},
+        )
+        mc.record_batch(
+            [_make_case()], [_make_response()], [_make_evaluation(decision="T0_Block")], [pair]
+        )
+        assert mc.avg_decision_severity == 1.0
+        assert mc.avg_pair_quality_heuristic == 0.2
+        assert mc.pair_quality_scores == [0.2]
+        assert mc.to_dict()["pair_quality_scored_count"] == 1
+        # A missing score must not be treated as a zero-quality observation.
+        mc.record_batch([_make_case()], [_make_response()], [None], [_make_dpo_pair()])
+        assert mc.avg_pair_quality_heuristic == 0.2
+        assert mc.total_pairs == 2
+
+    def test_mode_and_quality_roundtrip(self, tmp_path: Path) -> None:
+        mc = MetricsCollector(execution_mode=ExecutionMode.DEMO, run_id="demo-run")
+        pair = _make_dpo_pair()
+        pair.lineage = DataLineage(
+            source_policy_id="default-v1",
+            guidelines_hash="rules",
+            pipeline_run_id="demo-run",
+            execution_mode=ExecutionMode.DEMO,
+            quality_scores={"overall": 0.0},
+        )
+        mc.record_batch([_make_case()], [_make_response()], [_make_evaluation()], [pair])
+        path = tmp_path / "metrics.json"
+        mc.save(path)
+        loaded = MetricsCollector.load(path)
+        assert loaded.execution_mode is ExecutionMode.DEMO
+        assert loaded.run_id == "demo-run"
+        assert loaded.avg_pair_quality_heuristic == 0.0
+        assert loaded.pair_quality_scores == [0.0]
+        assert "avg_quality_score" not in loaded.to_dict()
+
+    def test_legacy_alias_is_severity_and_unknown(self, tmp_path: Path) -> None:
+        path = tmp_path / "legacy.json"
+        path.write_text(json.dumps({"avg_quality_score": 0.65}))
+        with pytest.warns(DeprecationWarning, match="avg_decision_severity"):
+            loaded = MetricsCollector.load(path)
+        assert loaded.execution_mode is ExecutionMode.UNKNOWN
+        assert loaded.run_id is None
+        assert loaded.avg_decision_severity == 0.65
+        assert loaded.avg_pair_quality_heuristic is None
+        with pytest.warns(DeprecationWarning, match="avg_decision_severity"):
+            assert loaded.avg_quality_score == 0.65
+
+    def test_legacy_saved_scores_keep_meaning(self, tmp_path: Path) -> None:
+        path = tmp_path / "legacy.json"
+        path.write_text(json.dumps({"severity_scores": [0.3, 0.7]}))
+        loaded = MetricsCollector.load(path)
+        assert loaded.execution_mode is ExecutionMode.UNKNOWN
+        assert loaded.avg_decision_severity == 0.5
+        assert loaded.avg_pair_quality_heuristic is None
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            [],
+            None,
+            {"severity_scores": "bad"},
+            {"severity_scores": ["0.5"]},
+            {"pair_quality_scores": [True]},
+            {"total_pairs": "2"},
+            {"decision_counts": []},
+            {"decision_counts": {"T0_Block": -1}},
+            {"dimension_counts": {"a": {}}},
+            {"dimension_counts": []},
+            {"batch_timestamps": [{}]},
+            {"run_id": 12},
+            {"execution_mode": "maybe"},
+            {"avg_decision_severity": None},
+        ],
+    )
+    def test_invalid_snapshots_raise(self, tmp_path: Path, payload: object) -> None:
+        path = tmp_path / "metrics.json"
+        path.write_text(json.dumps(payload))
+        with pytest.raises((ValueError, TypeError)):
+            MetricsCollector.load(path)
 
 
 class TestDashboardBridge:
@@ -314,7 +412,7 @@ class TestDashboardBridge:
     def test_snapshot_from_metrics(self, tmp_path: Path) -> None:
         """从持久化指标构建快照"""
         # 先保存指标
-        mc = MetricsCollector()
+        mc = MetricsCollector(execution_mode=ExecutionMode.LIVE)
         case = _make_case()
         mc.record_batch(
             [case],
@@ -322,7 +420,7 @@ class TestDashboardBridge:
             [_make_evaluation(has_stealth=True, decision="T1_Shadowban")],  # Judge 金标
             [_make_dpo_pair()],
         )
-        mc.save(tmp_path / "metrics.json")
+        mc.save(tmp_path / "live" / "metrics.json")
 
         # 通过 bridge 加载
         bridge = DashboardBridge(data_dir=tmp_path)
@@ -333,13 +431,15 @@ class TestDashboardBridge:
         assert snap.flag_count == 1
         assert snap.block_count == 0
         assert snap.dpo_pairs == 1
-        assert snap.avg_quality > 0
+        assert snap.avg_decision_severity > 0
+        assert snap.avg_pair_quality_heuristic is None
+        assert snap.execution_mode is ExecutionMode.LIVE
         # sub_scores 三键
         assert "stealth_marketing_rate" in snap.sub_scores
         assert "ai_slop_rate" in snap.sub_scores
         assert "avg_severity" in snap.sub_scores
         assert snap.sub_scores["stealth_marketing_rate"] == 1.0
-        assert len(snap.quality_scores) == 1
+        assert len(snap.severity_scores) == 1
         # decision_distribution 必须包含 T1_Shadowban=1
         assert snap.decision_distribution["T1_Shadowban"] == 1
         # 同时记录 Moderator 的弱判决分布
@@ -349,15 +449,18 @@ class TestDashboardBridge:
         """包含管道运行历史"""
         import json
 
-        mc = MetricsCollector()
+        mc = MetricsCollector(execution_mode=ExecutionMode.LIVE)
         case = _make_case()
         mc.record_batch([case], [_make_response()], [_make_evaluation()], [])
-        mc.save(tmp_path / "metrics.json")
+        mc.save(tmp_path / "live" / "metrics.json")
 
         # 写入运行记录
-        runs_path = tmp_path / "runs.jsonl"
+        runs_path = tmp_path / "live" / "runs.jsonl"
         with open(runs_path, "w", encoding="utf-8") as f:
-            f.write(json.dumps({"run_id": "test-run", "status": "completed"}) + "\n")
+            f.write(
+                json.dumps({"run_id": "test-run", "status": "completed", "execution_mode": "live"})
+                + "\n"
+            )
 
         bridge = DashboardBridge(data_dir=tmp_path)
         snap = bridge.get_latest_snapshot()

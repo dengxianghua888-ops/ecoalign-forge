@@ -1,64 +1,74 @@
-"""EcoAlign-Forge 快速入门示例"""
+"""Recorded-data quickstart; no LLM API calls or credentials are required."""
 
 import asyncio
-import sys
-from pathlib import Path
 
-# 确保可以导入项目模块
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
+from ecoalign_forge.config import settings
 from ecoalign_forge.engine.orchestrator import AgentOrchestrator
+from ecoalign_forge.reports import generate_html_report
 from ecoalign_forge.schemas.pipeline import PipelineConfig
 from ecoalign_forge.schemas.policy import PolicyDimension, PolicyInput
 
 
-async def main():
-    # 1. 定义内容审核策略（与 guidelines.md 的两策略 ontology 对齐）
+async def main() -> int:
     policy = PolicyInput(
         policy_id="quickstart-v1",
         name="内容分发分级平台",
         dimensions=[
-            PolicyDimension(
-                name="stealth_marketing",
-                description="高隐蔽性私域引流：微信号、谐音字、emoji 夹带、暗号话术、二维码、评论区接力",
-            ),
-            PolicyDimension(
-                name="ai_slop",
-                description="低信息熵 AI 洗稿：套话开篇、语义重复、缺第一手细节、高度雷同、稀薄列表",
-            ),
+            PolicyDimension(name="stealth_marketing", description="高隐蔽性私域引流"),
+            PolicyDimension(name="ai_slop", description="低信息量、重复、缺少第一手细节"),
         ],
     )
+    config = PipelineConfig(num_samples=5, batch_size=5)
+    orchestrator = AgentOrchestrator(config=config, demo=True)
+    result = await orchestrator.run(policy=policy)
 
-    # 2. 配置管道参数
-    config = PipelineConfig(
-        num_samples=5,       # 快速测试：仅生成 5 个样本
-        batch_size=5,        # 单批次处理
-        max_concurrent=3,    # 最大并发 LLM 调用
+    print(f"状态: {result.status.value}")
+    print(f"执行模式: {result.execution_mode.value}（预录数据，不代表真实模型执行）")
+    print(f"Fixture: {result.fixture_version}")
+    print(f"阶段计数: {result.counts.model_dump()}")
+    print(f"平均判决严重度: {result.avg_decision_severity:.2f}（不是正确率）")
+    print(f"偏好对启发式分数: {result.avg_pair_quality_heuristic}")
+    print(f"候选偏好对: {result.total_dpo_pairs}")
+    print(f"输出文件: {result.output_path}")
+    print(f"诊断文件: {result.diagnostics_path}")
+    if result.error:
+        print(f"错误: {result.error}")
+
+    heuristic_scores = [
+        pair.lineage.quality_scores["overall"]
+        for pair in result.dpo_pairs
+        if pair.lineage is not None and "overall" in pair.lineage.quality_scores
+    ]
+    report_path = generate_html_report(
+        dataset_name="EcoAlign-Forge recorded demo",
+        execution_mode=result.execution_mode,
+        run_id=result.run_id,
+        fixture_version=result.fixture_version,
+        total_pairs=result.total_dpo_pairs,
+        avg_decision_severity=result.avg_decision_severity,
+        avg_pair_quality_heuristic=result.avg_pair_quality_heuristic,
+        avg_preference_gap=(
+            sum(pair.preference_gap for pair in result.dpo_pairs) / result.total_dpo_pairs
+            if result.total_dpo_pairs
+            else 0.0
+        ),
+        interception_rate=result.interception_rate,
+        decision_counts=orchestrator.metrics.decision_counts,
+        dimension_stats=result.dimension_stats,
+        severity_distribution=orchestrator.metrics.severity_scores,
+        pair_quality_heuristic_distribution=heuristic_scores,
+        flywheel_summary=orchestrator.flywheel.get_summary() if orchestrator.flywheel else None,
+        output_path=settings.data_dir
+        / result.execution_mode.value
+        / f"report_{result.run_id}.html",
     )
-
-    # 3. 运行管道
-    print("启动 EcoAlign-Forge 数据合成管道...")
-    orchestrator = AgentOrchestrator(config=config)
-    result = await orchestrator.run(policy=policy, num_samples=5)
-
-    # 4. 输出结果
-    print(f"\n合成完成！")
-    print(f"   总用例数: {result.total_cases}")
-    print(f"   评估数量: {result.total_evaluations}")
-    print(f"   DPO 训练对: {result.total_dpo_pairs}")
-    print(f"   平均质量分: {result.avg_quality_score:.2f}")
-    print(f"   拦截率: {result.interception_rate:.1%}")
-    print(f"   输出文件: {result.output_path}")
-
-    # 5. 查看 DPO 对示例
-    if result.dpo_pairs:
-        print(f"\nDPO 训练对示例:")
-        pair = result.dpo_pairs[0]
-        print(f"   Prompt: {pair.prompt[:80]}...")
-        print(f"   Chosen: {pair.chosen[:80]}...")
-        print(f"   Rejected: {pair.rejected[:80]}...")
-        print(f"   偏好差距: {pair.preference_gap:.2f}")
+    print(f"HTML 诊断报告: {report_path.resolve()}")
+    print("模型质量提升与训练收敛：未评估。")
+    return result.status.exit_code
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        raise SystemExit(asyncio.run(main()))
+    except KeyboardInterrupt:
+        raise SystemExit(130) from None
