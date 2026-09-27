@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  LITELLM_LOCAL_MODEL_COST_MAP: "True"
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -28,18 +31,18 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff check src/ tests/
+          ruff check .
 
       - name: Run tests
         run: |
           pytest tests/ -q --tb=short --cov=src/ecoalign_forge --cov-report=term-missing
 
-  type-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install -e ".[dev]"
-      - run: python -m py_compile src/ecoalign_forge/__init__.py
+      - name: Build distributions and run installed demo outside checkout
+        run: |
+          python -m hatchling build
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+          cd "$(mktemp -d)"
+          ecoalign-forge --demo --num-samples 5
+
+      - name: Deterministic success and controlled failure evidence
+        run: python scripts/accept_iteration_a.py --output /tmp/ecoalign-acceptance

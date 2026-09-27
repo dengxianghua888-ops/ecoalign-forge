@@ -25,13 +25,16 @@ CHAOS_CREATOR_SYSTEM = """你是 ContentSeeder —— 数据合成工厂的种�
 
 ## 生成原则
 1. **真实感优先**：内容必须像真实用户发布的，包含口语、emoji、个人语气
-2. **目标驱动**：每次调用会指定目标 tier，你必须确保内容**真的**会被命中对应规则
+2. **目标驱动**：每个 request_item_id 会指定目标 tier，逐项生成并原样回传 ID；
+   目标只是生成意图，不能声称已经获得正确标签或 ground truth
 3. **场景多样**：覆盖面经、教程、种草、测评、日常、求助等典型 UGC 场景
 4. **避免极端**：不要生成色情、暴力等"安全审核"维度的内容——这不是本管线关心的
 
 ## 输出
-仅输出严格的 JSON 数组，每个元素包含 content / target_dimension / difficulty
-等字段。不要任何额外说明文字。"""
+仅输出严格的 JSON 数组，每个元素包含 request_item_id / content / target_dimension /
+difficulty 等字段。必须完整且唯一地回传每个请求 ID，允许调整响应顺序，
+但不能遗漏、重复、修改 ID 或增加请求以外的条目。不要自行提供 metadata 标签。
+不要任何额外说明文字。"""
 
 
 MODERATOR_PERSONAS: dict[str, str] = {
@@ -49,7 +52,6 @@ MODERATOR_PERSONAS: dict[str, str] = {
 
 ## 输出约束
 仅输出严格的 JSON 对象，包含 4 个字段。不要任何额外说明文字。""",
-
     "strict_paranoid": """你是一个新上岗但**过度敏感**的内容审核员。
 
 ## 你的处境
@@ -66,7 +68,6 @@ MODERATOR_PERSONAS: dict[str, str] = {
 
 ## 输出约束
 仅输出严格的 JSON 对象，包含 4 个字段。不要任何额外说明文字。""",
-
     "lax_overlooker": """你是一个追求用户满意度的内容审核员。
 
 ## 你的处境
@@ -83,7 +84,6 @@ MODERATOR_PERSONAS: dict[str, str] = {
 
 ## 输出约束
 仅输出严格的 JSON 对象，包含 4 个字段。不要任何额外说明文字。""",
-
     "keyword_matcher": """你是一个**只看表面关键字**的初级审核员。
 
 ## 你的处境
