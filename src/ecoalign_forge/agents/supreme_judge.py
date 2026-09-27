@@ -51,10 +51,10 @@ class SupremeJudge(BaseAgent):
         self,
         cases: list[ChaosCase],
     ) -> list[JudgeEvaluation | None]:
-        """只产出 gold 判决，不做 DPO 配对。
+        """只产出 机器判决，不做 DPO 配对。
 
         返回列表与 cases 按位置对齐；解析重试用尽的位置为 None。
-        这个方法是 multi-persona 架构的关键：一份 gold 判决可以对多个
+        这个方法是 multi-persona 架构的关键：一份 机器判决可以对多个
         persona 的 rejected 候选做配对，避免 Judge 重复调用。
         """
         self._log(f"Judging {len(cases)} content items for distribution tiering")
@@ -77,7 +77,7 @@ class SupremeJudge(BaseAgent):
 
         Args:
             cases: 原始用例列表
-            judge_evals: Judge 金标判决，与 cases 位置对齐
+            judge_evals: Judge 机器判决，与 cases 位置对齐
             persona_eval_sets: N 个 persona 的判决集合，每个都与 cases 位置对齐
             policy: 策略上下文
 
@@ -119,7 +119,7 @@ class SupremeJudge(BaseAgent):
     ) -> tuple[list[JudgeEvaluation | None], list[DPO_Pair]]:
         """向后兼容入口：单 persona 路径。
 
-        对每条 case 产出 gold 判决，并按需生成 DPO 对。内部调用
+        对每条 case 产出 机器判决，并按需生成 DPO 对。内部调用
         `evaluate` + `build_dpo_pairs_multi_persona`（只传 1 个 persona 集合）。
 
         返回的 judge_results 与 cases 保持位置对齐（失败位为 None），
@@ -138,9 +138,7 @@ class SupremeJudge(BaseAgent):
             policy=policy,
         )
         succeeded = sum(1 for e in judge_results if e is not None)
-        self._log(
-            f"Produced {succeeded} evaluations, {len(dpo_pairs)} DPO pairs"
-        )
+        self._log(f"Produced {succeeded} evaluations, {len(dpo_pairs)} DPO pairs")
         return judge_results, dpo_pairs
 
     @staticmethod
@@ -177,16 +175,12 @@ class SupremeJudge(BaseAgent):
         try:
             data = json.loads(json_text)
         except json.JSONDecodeError as e:
-            raise SchemaValidationError(
-                f"Judge 输出无法解析为有效 JSON: {e}"
-            ) from e
+            raise SchemaValidationError(f"Judge 输出无法解析为有效 JSON: {e}") from e
 
         try:
             return JudgeEvaluation(**data)
         except ValidationError as e:
-            raise SchemaValidationError(
-                f"Judge 输出不符合 Schema 约束: {e}"
-            ) from e
+            raise SchemaValidationError(f"Judge 输出不符合 Schema 约束: {e}") from e
 
     def _build_dpo_pair(
         self,
@@ -195,7 +189,7 @@ class SupremeJudge(BaseAgent):
         judge_eval: JudgeEvaluation,
         policy: PolicyInput,
     ) -> DPO_Pair | None:
-        """构造 DPO 对：chosen=Judge 的 gold 判决，rejected=Moderator 的初级判决。
+        """构造 DPO 对：chosen=Judge 的 机器判决，rejected=Moderator 的初级判决。
 
         两种配对策略（按优先级）：
 
@@ -208,12 +202,8 @@ class SupremeJudge(BaseAgent):
         chosen / rejected 都是完整 JudgeEvaluation 的 JSON 序列化。
         """
         if moderator_eval.final_decision != judge_eval.final_decision:
-            return self._build_direct_disagreement_pair(
-                case, moderator_eval, judge_eval, policy
-            )
-        return self._build_reasoning_quality_pair(
-            case, moderator_eval, judge_eval, policy
-        )
+            return self._build_direct_disagreement_pair(case, moderator_eval, judge_eval, policy)
+        return self._build_reasoning_quality_pair(case, moderator_eval, judge_eval, policy)
 
     @staticmethod
     def _make_dpo_prompt(case: ChaosCase, policy: PolicyInput) -> str:
@@ -222,7 +212,7 @@ class SupremeJudge(BaseAgent):
             f"Read the content below and output a JudgeEvaluation JSON deciding "
             f"whether it hits stealth marketing / AI slop, with a 3-step CoT and "
             f"a final tier in [T0_Block, T1_Shadowban, T2_Normal, T3_Recommend].\n\n"
-            f"Content: \"{case.content}\""
+            f'Content: "{case.content}"'
         )
 
     def _build_direct_disagreement_pair(
@@ -235,7 +225,7 @@ class SupremeJudge(BaseAgent):
         """final_decision 不同时的直接分歧 DPO 对。
 
         chosen_score/rejected_score 表示"判决质量"而非"严厉程度"：
-        chosen(Judge 金标)固定高分，rejected(Moderator)固定低分，
+        chosen(Judge 机器)固定高分，rejected(Moderator)固定低分，
         gap 用严厉度差值衡量信号强度。保证 chosen_score > rejected_score。
         """
         severity_gap = abs(
@@ -246,7 +236,7 @@ class SupremeJudge(BaseAgent):
         if severity_gap < 0.1:
             return None
 
-        # chosen=Judge 金标判决，质量固定高分；rejected=Moderator 弱判决，低分
+        # chosen=Judge 机器判决，质量固定高分；rejected=Moderator 弱判决，低分
         # gap 使用严厉度差值归一化到 [0, 1]
         chosen_score = 0.9
         rejected_score = max(0.0, 0.9 - severity_gap)
