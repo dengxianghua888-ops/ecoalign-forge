@@ -55,10 +55,15 @@ def _make_evaluation(case_id: str) -> JudgeEvaluation:
 
 def _make_dpo_pair(case_id: str) -> DPO_Pair:
     return DPO_Pair(
-        prompt="p", chosen="c", rejected="r",
-        chosen_score=0.9, rejected_score=0.2,
-        preference_gap=0.7, dimension="violence",
-        difficulty="medium", source_case_id=case_id,
+        prompt="p",
+        chosen="c",
+        rejected="r",
+        chosen_score=0.9,
+        rejected_score=0.2,
+        preference_gap=0.7,
+        dimension="violence",
+        difficulty="medium",
+        source_case_id=case_id,
     )
 
 
@@ -84,6 +89,7 @@ class TestAgentOrchestrator:
 
             orch = AgentOrchestrator(
                 config=config,
+                execution_mode="mock",
                 enable_constitutional=False,
                 enable_flywheel=False,
                 enable_adaptive_sampling=False,
@@ -100,11 +106,10 @@ class TestAgentOrchestrator:
         cases = [case]
         resp = _make_response(case.case_id)
         ev = _make_evaluation(case.case_id)
-        pair = _make_dpo_pair(case.case_id)
 
         orchestrator.chaos_creator.run = AsyncMock(return_value=cases)
         orchestrator.moderator.run = AsyncMock(return_value=[resp])
-        orchestrator.judge.run = AsyncMock(return_value=([ev], [pair]))
+        orchestrator.judge.evaluate = AsyncMock(return_value=[ev])
 
         result = await orchestrator.run(policy=sample_policy, num_samples=1)
 
@@ -113,25 +118,26 @@ class TestAgentOrchestrator:
         assert result.total_evaluations == 1
         orchestrator.chaos_creator.run.assert_called_once()
         orchestrator.moderator.run.assert_called_once()
-        orchestrator.judge.run.assert_called_once()
+        orchestrator.judge.evaluate.assert_called_once()
 
     async def test_multiple_batches(self, orchestrator, sample_policy) -> None:
-        """多批次执行"""
         orchestrator.config.batch_size = 2
 
-        case = _make_case()
-        orchestrator.chaos_creator.run = AsyncMock(return_value=[case])
-        orchestrator.moderator.run = AsyncMock(
-            return_value=[_make_response(case.case_id)]
-        )
-        orchestrator.judge.run = AsyncMock(
-            return_value=([_make_evaluation(case.case_id)], [_make_dpo_pair(case.case_id)])
-        )
+        async def generate(**kwargs):
+            return [_make_case() for _ in range(kwargs["batch_size"])]
 
-        await orchestrator.run(policy=sample_policy, num_samples=5)
+        async def moderate(cases, **kwargs):
+            return [_make_response() for _ in cases]
 
-        # 5 样本，batch_size=2，应执行 3 批
+        async def judge(cases):
+            return [_make_evaluation(c.case_id) for c in cases]
+
+        orchestrator.chaos_creator.run = AsyncMock(side_effect=generate)
+        orchestrator.moderator.run = AsyncMock(side_effect=moderate)
+        orchestrator.judge.evaluate = AsyncMock(side_effect=judge)
+        result = await orchestrator.run(policy=sample_policy, num_samples=5)
         assert orchestrator.chaos_creator.run.call_count == 3
+        assert result.counts.completed == 5
 
     async def test_agent_error_recovery(self, orchestrator, sample_policy) -> None:
         """Agent 异常后管道继续"""
@@ -144,15 +150,11 @@ class TestAgentOrchestrator:
                 [case],
             ]
         )
-        orchestrator.moderator.run = AsyncMock(
-            return_value=[_make_response(case.case_id)]
-        )
-        orchestrator.judge.run = AsyncMock(
-            return_value=([_make_evaluation(case.case_id)], [])
-        )
+        orchestrator.moderator.run = AsyncMock(return_value=[_make_response(case.case_id)])
+        orchestrator.judge.evaluate = AsyncMock(return_value=[_make_evaluation(case.case_id)])
 
-        orchestrator.config.batch_size = 3
-        await orchestrator.run(policy=sample_policy, num_samples=6)
+        orchestrator.config.batch_size = 1
+        await orchestrator.run(policy=sample_policy, num_samples=2)
 
         # 第一批失败，第二批成功
         assert orchestrator.chaos_creator.run.call_count == 2
@@ -161,12 +163,8 @@ class TestAgentOrchestrator:
         """结果包含输出路径"""
         case = _make_case()
         orchestrator.chaos_creator.run = AsyncMock(return_value=[case])
-        orchestrator.moderator.run = AsyncMock(
-            return_value=[_make_response(case.case_id)]
-        )
-        orchestrator.judge.run = AsyncMock(
-            return_value=([_make_evaluation(case.case_id)], [_make_dpo_pair(case.case_id)])
-        )
+        orchestrator.moderator.run = AsyncMock(return_value=[_make_response(case.case_id)])
+        orchestrator.judge.evaluate = AsyncMock(return_value=[_make_evaluation(case.case_id)])
 
         result = await orchestrator.run(policy=sample_policy, num_samples=1)
 
@@ -177,12 +175,8 @@ class TestAgentOrchestrator:
         """管道执行后指标被持久化"""
         case = _make_case()
         orchestrator.chaos_creator.run = AsyncMock(return_value=[case])
-        orchestrator.moderator.run = AsyncMock(
-            return_value=[_make_response(case.case_id)]
-        )
-        orchestrator.judge.run = AsyncMock(
-            return_value=([_make_evaluation(case.case_id)], [])
-        )
+        orchestrator.moderator.run = AsyncMock(return_value=[_make_response(case.case_id)])
+        orchestrator.judge.evaluate = AsyncMock(return_value=[_make_evaluation(case.case_id)])
 
         await orchestrator.run(policy=sample_policy, num_samples=1)
 

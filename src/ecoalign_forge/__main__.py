@@ -23,6 +23,8 @@ def main() -> None:
         help="Number of samples to generate (default: 5)",
     )
     args = parser.parse_args()
+    if not 1 <= args.num_samples <= 10000:
+        parser.error("--num-samples must be between 1 and 10000")
 
     # 配置日志
     logging.basicConfig(
@@ -59,21 +61,25 @@ def main() -> None:
     orchestrator = AgentOrchestrator(demo=args.demo)
 
     try:
-        result = asyncio.run(
-            orchestrator.run(policy=policy, num_samples=args.num_samples)
-        )
+        result = asyncio.run(orchestrator.run(policy=policy, num_samples=args.num_samples))
+    except KeyboardInterrupt:
+        raise SystemExit(130) from None
     except Exception as e:
         print(f"\n Pipeline failed: {e}", file=sys.stderr)
         raise SystemExit(1) from e
 
     # 结果摘要
     print("\n" + "=" * 60)
-    print("  Pipeline Complete!")
+    print(f"  Pipeline {result.status.value} ({result.execution_mode.value})")
     print("=" * 60)
     print(f"  Total cases:      {result.total_cases}")
     print(f"  Evaluations:      {result.total_evaluations}")
     print(f"  DPO pairs:        {result.total_dpo_pairs}")
-    print(f"  Avg quality:      {result.avg_quality_score:.2f}")
+    print(f"  Avg decision severity: {result.avg_decision_severity:.2f}")
+    print(f"  Pair quality heuristic: {result.avg_pair_quality_heuristic}")
+    print(f"  Counts: {result.counts.model_dump()}")
+    if result.error:
+        print(f"  Error: {result.error}")
     print(f"  Interception rate: {result.interception_rate:.1%}")
     print(f"  Output:           {result.output_path}")
 
@@ -85,10 +91,13 @@ def main() -> None:
         print(f"    Rejected: {pair.rejected[:70]}...")
         print(f"    Gap:      {pair.preference_gap:.2f}")
         if pair.lineage:
-            print(f"    Lineage:  policy={pair.lineage.source_policy_id}, "
-                  f"judge={pair.lineage.judge_model}")
+            print(
+                f"    Lineage:  policy={pair.lineage.source_policy_id}, "
+                f"judge={pair.lineage.judge_model}"
+            )
 
     print()
+    raise SystemExit(result.status.exit_code)
 
 
 if __name__ == "__main__":

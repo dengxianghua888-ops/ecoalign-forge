@@ -25,6 +25,7 @@ from tenacity import (
 
 from ecoalign_forge.config import settings
 from ecoalign_forge.exceptions import (
+    AgentError,
     LLMError,
     ParseRetryExhaustedError,
     SchemaValidationError,
@@ -60,8 +61,11 @@ T = TypeVar("T")
 class LLMClient:
     """异步 LLM 客户端，基于 LiteLLM，支持 100+ 供应商。"""
 
-    def __init__(self, default_model: str = "openai/gpt-4o-mini") -> None:
+    def __init__(
+        self, default_model: str = "openai/gpt-4o-mini", *, allow_network: bool = True
+    ) -> None:
         self.default_model = default_model
+        self.allow_network = allow_network
 
     @retry(
         stop=stop_after_attempt(_RETRY_MAX_ATTEMPTS),
@@ -89,6 +93,8 @@ class LLMClient:
         `response_format`）会直接透传给 litellm.acompletion，便于支持
         provider-specific 参数而无需修改签名。
         """
+        if not self.allow_network:
+            raise AgentError("LLMClient", "Network model calls are disabled in demo/mock mode")
         # 注入全局 reasoning_effort（若 settings 配置了且调用方未显式指定）
         if _DEFAULT_REASONING_EFFORT and "reasoning_effort" not in kwargs:
             kwargs["reasoning_effort"] = _DEFAULT_REASONING_EFFORT
@@ -201,9 +207,7 @@ class LLMClient:
                     try:
                         return parser(raw)
                     except SchemaValidationError as e:
-                        logger.warning(
-                            f"解析失败 (第 {attempts} 次)，重试中: {e}"
-                        )
+                        logger.warning(f"解析失败 (第 {attempts} 次)，重试中: {e}")
                         raise
         except SchemaValidationError as e:
             # reraise=True：tenacity 用尽重试后直接抛出最后一次原始异常

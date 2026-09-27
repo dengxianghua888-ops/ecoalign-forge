@@ -2,9 +2,16 @@
 
 from ecoalign_forge.schemas.chaos import AttackStrategy, ChaosCase, Difficulty
 from ecoalign_forge.schemas.dpo import DPO_Pair
+from ecoalign_forge.schemas.execution import ExecutionMode
 from ecoalign_forge.schemas.judge import DECISION_SEVERITY, FinalDecision, JudgeEvaluation
 from ecoalign_forge.schemas.lineage import DataLineage
-from ecoalign_forge.schemas.pipeline import PipelineConfig, PipelineResult, PipelineRun
+from ecoalign_forge.schemas.pipeline import (
+    PipelineConfig,
+    PipelineResult,
+    PipelineRun,
+    PipelineStatus,
+    RunCounts,
+)
 from ecoalign_forge.schemas.policy import PolicyDimension, PolicyInput
 
 __all__ = [
@@ -14,11 +21,14 @@ __all__ = [
     "DPO_Pair",
     "DataLineage",
     "Difficulty",
+    "ExecutionMode",
     "FinalDecision",
     "JudgeEvaluation",
     "PipelineConfig",
     "PipelineResult",
     "PipelineRun",
+    "PipelineStatus",
     "PolicyDimension",
     "PolicyInput",
+    "RunCounts",
 ]
