@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ecoalign-forge"
-version = "0.2.0"
+version = "0.2.1a1"
 description = "Multi-Agent framework for content moderation & alignment (RLHF/DPO) data synthesis."
 readme = "README.md"
 license = "Apache-2.0"
@@ -38,6 +38,7 @@ dashboard = [
     "pandas>=2.1.0",
 ]
 dev = [
+    "hatchling>=1.25.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=5.0.0",
@@ -50,6 +51,24 @@ ecoalign-forge = "ecoalign_forge.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ecoalign_forge"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/dashboard",
+    "/examples",
+    "/scripts",
+    "/docs",
+    "/CHANGELOG.md",
+    "/README.md",
+    "/README_zh.md",
+    "/LICENSE",
+    "/guidelines.md",
+    "/Makefile",
+    "/.env.example",
+    "/pyproject.toml",
+]
 
 [tool.ruff]
 target-version = "py311"

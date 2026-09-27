@@ -1,25 +1,21 @@
-"""guidelines.md 加载器 + 规则编号注册表（延迟初始化单例）.
+"""包内默认手册加载器与规则编号注册表。
 
-通过 `functools.lru_cache` 实现延迟加载：首次调用 `get_guidelines_text()`
-或 `get_known_rule_ids()` 时才从磁盘读取 `guidelines.md`。这避免了模块
-导入期的文件 I/O 副作用——CI 环境或单元测试中无需真实文件也能正常 import。
-
-同时保留 `GUIDELINES_TEXT` / `KNOWN_RULE_IDS` 作为模块级别名以兼容现有代码。
+首次读取时加载包内唯一手册，后续缓存。资源访问不依赖源码布局或当前工作
+目录，也支持从 wheel/zip 读取。兼容的 ``GUIDELINES_TEXT`` / ``KNOWN_RULE_IDS``
+属性在访问时加载，因此调用方使用 ``from ... import`` 时仍可能立即读取手册。
 """
 
 from __future__ import annotations
 
 import re
 from functools import lru_cache
-from pathlib import Path
+from importlib.resources import files
+from importlib.resources.abc import Traversable
 
 from ecoalign_forge.exceptions import EcoAlignError
 
-# 项目根目录 = src/ecoalign_forge/_guidelines.py 的上三级
-# /<project>/src/ecoalign_forge/_guidelines.py
-#  └─ parents[0]=ecoalign_forge, [1]=src, [2]=<project>
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-GUIDELINES_PATH = PROJECT_ROOT / "guidelines.md"
+# 保留旧属性名；其类型是包资源 Traversable，不保证是本地文件系统 Path。
+GUIDELINES_PATH: Traversable = files("ecoalign_forge").joinpath("resources", "guidelines.md")
 
 # 规则编号格式：A-001, A-002, ..., B-001, B-002, ...
 _RULE_ID_PATTERN = re.compile(r"\b([AB]-\d{3})\b")
@@ -27,12 +23,15 @@ _RULE_ID_PATTERN = re.compile(r"\b([AB]-\d{3})\b")
 
 def _load_guidelines() -> str:
     """加载并校验 guidelines.md。失败抛 EcoAlignError，不静默降级。"""
-    if not GUIDELINES_PATH.exists():
+    if not GUIDELINES_PATH.is_file():
         raise EcoAlignError(
             f"找不到 guidelines.md（{GUIDELINES_PATH}）。"
-            f"Supreme Judge 必须依据手册做判决，请确认文件存在。"
+            "Supreme Judge 必须依据手册做判决，请检查安装包是否完整。"
         )
-    text = GUIDELINES_PATH.read_text(encoding="utf-8")
+    try:
+        text = GUIDELINES_PATH.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise EcoAlignError(f"无法读取 guidelines.md（{GUIDELINES_PATH}）: {exc}") from exc
     if not text.strip():
         raise EcoAlignError(
             f"guidelines.md 是空文件（{GUIDELINES_PATH}）。"
