@@ -203,3 +203,68 @@ async def test_missing_id_never_enters_moderator(tmp_path):
     r = await k.run(p, RunConfig(execution_mode="mock", num_samples=2, max_attempts=2))
     assert r["status"] == "failed" and r["counts"]["generated"] == 0
     assert calls == ["generator", "generator"]
+
+
+@pytest.mark.asyncio
+async def test_budget_pause_and_only_upward_revision(tmp_path):
+    from decimal import Decimal
+
+    data = pack_data()
+    p = PolicyPack.model_validate(data)
+    transport = RecordedTransport(p)
+    defaults = RunConfig()
+    cfg = RunConfig(
+        execution_mode="live",
+        num_samples=1,
+        max_run_cost=".000001",
+        tpm=1000000,
+        prices={
+            m.model: dict(input_per_million=1, output_per_million=2)
+            for m in defaults.models.values()
+        },
+    )
+    k = kernel(tmp_path, transport)
+    paused = await k.run(p, cfg)
+    assert paused["pause_reason"] == "budget_exhausted" and not transport.calls
+    with pytest.raises(ValueError, match="increase"):
+        await k.resume(k.last_run_dir, max_run_cost=Decimal(".0000001"))
+    completed = await k.resume(k.last_run_dir, max_run_cost=Decimal("1"), extend_seconds=10)
+    assert completed["status"] == "completed"
+    assert Decimal(completed["budget"]["unresolved_reserved_usd"]) > 0  # missing usage is not free
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language,text", [("zh", "联系鸦青 🐦"), ("ar", "تواصل مع رافن 🐦")])
+async def test_multilingual_pipeline_unicode_labels(tmp_path, language, text):
+    data = pack_data()
+    data["language"] = language
+    data["dimensions"][0].update(
+        labels=["有联系", "无联系"],
+        default="无联系",
+        rows=[dict(label="有联系", when=dict(op="rule", ref="CONTACT"))],
+    )
+    data["decisions"][0]["when"]["value"] = "有联系"
+    pack = PolicyPack.model_validate(data)
+    k = kernel(tmp_path, RecordedTransport(pack, text=text))
+    r = await k.run(pack, RunConfig(execution_mode="mock", num_samples=1))
+    assert r["status"] == "completed" and r["avg_decision_severity"] is None
+    pair = json.loads(Path(r["output_path"]).read_text().splitlines()[0])
+    chosen = json.loads(pair["chosen"])
+    assert chosen["evidence"][0]["quote"] == text and chosen["labels"]["contact"] == "有联系"
+    messages = json.loads(
+        (Path(r["output_path"]).parent / "trl_conversational.jsonl").read_text().splitlines()[0]
+    )["prompt"]
+    assert json.loads(messages[-1]["content"])["language"] == language
+
+
+@pytest.mark.asyncio
+async def test_model_cannot_skip_enabled_review(tmp_path):
+    pack = PolicyPack.model_validate(pack_data())
+    k = kernel(
+        tmp_path,
+        RecordedTransport(
+            pack, reviewer=lambda _: dict(status="skipped", reason="bypass", corrected=None)
+        ),
+    )
+    result = await k.run(pack, RunConfig(execution_mode="mock", num_samples=1))
+    assert result["status"] == "failed" and result["counts"]["dpo_pairs"] == 0

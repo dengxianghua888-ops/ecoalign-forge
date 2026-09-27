@@ -187,3 +187,12 @@ def test_run_config_price_and_alias():
         c = compile_policy(PolicyPack.model_validate(pack_data()))
         _, action, _, _ = derive(c, {"CONTACT": values[0]})
         assert action == {"hit": "review", "miss": "allow", "unknown": None}[values[0]]
+
+
+def test_run_config_nested_maps_immutable():
+    cfg = RunConfig()
+    with pytest.raises(TypeError, match="immutable"):
+        cfg.models["judge"] = cfg.models["moderator"]
+    with pytest.raises(ValueError):
+        RunConfig(num_samples=True)
+    assert RunConfig.model_validate_json(cfg.model_dump_json()) == cfg

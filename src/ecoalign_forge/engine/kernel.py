@@ -69,6 +69,8 @@ class SynthesisKernel:
         transport=None,
         hook=None,
     ):
+        self._explicit_data_dir = data_dir is not None
+        self._explicit_datasets_dir = datasets_dir is not None
         self.data_dir = Path(data_dir or settings.data_dir)
         self.datasets_dir = Path(datasets_dir or settings.datasets_dir)
         self.transport = transport
@@ -97,6 +99,10 @@ class SynthesisKernel:
         ]
         manifest = dict(
             schema_version=2,
+            storage=dict(
+                data_root=str(self.data_dir.resolve()),
+                datasets_root=str(self.datasets_dir.resolve()),
+            ),
             run_id=run_id,
             execution_mode=config.execution_mode.value,
             fixture_version=FIXTURE_VERSION if config.execution_mode.value == "demo" else None,
@@ -131,6 +137,15 @@ class SynthesisKernel:
         try:
             with j.owner():
                 manifest = j.get("manifest")
+                storage = manifest.get("storage", {})
+                if not self._explicit_data_dir and storage.get("data_root"):
+                    self.data_dir = Path(storage["data_root"])
+                if not self._explicit_datasets_dir and storage.get("datasets_root"):
+                    self.datasets_dir = Path(storage["datasets_root"])
+                if storage.get("data_root") and self.data_dir.resolve() != Path(
+                    storage["data_root"]
+                ):
+                    raise ValueError("Resume must use the original shared quota data root")
                 if (
                     manifest["template_version"] != TEMPLATE_VERSION
                     or manifest["code"]["source_sha256"] != code_identity()["source_sha256"]
@@ -142,6 +157,8 @@ class SynthesisKernel:
                 if compiled.sha256 != manifest["policy_hash"]:
                     raise ValueError("Policy snapshot hash mismatch")
                 config = RunConfig.model_validate(j.get("effective_config", manifest["config"]))
+                if j.get("deadline") is None:
+                    j.set("deadline", manifest["created_at"] + config.run_timeout)
                 updates = {}
                 if max_run_cost is not None:
                     if config.max_run_cost is None or Decimal(max_run_cost) < config.max_run_cost:

@@ -13,6 +13,10 @@ def resolve_config(
     *, explicit: dict | None = None, path: Path | None = None, environ=None
 ) -> RunConfig:
     env = os.environ if environ is None else environ
+    supported = {"ECOALIGN_" + name.upper() for name in RunConfig.model_fields}
+    unknown = {key for key in env if key.startswith("ECOALIGN_")} - supported
+    if unknown:
+        raise ValueError("Unsupported configuration keys: " + ", ".join(sorted(unknown)))
     values = {}
     for name in RunConfig.model_fields:
         key = "ECOALIGN_" + name.upper()

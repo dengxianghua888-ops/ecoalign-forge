@@ -14,14 +14,13 @@ from ecoalign_forge.storage.agreement import (
 # 辅助：快速构造 JudgeEvaluation
 # ──────────────────────────────────────────────────────────────
 
+
 def _eval(decision: str) -> JudgeEvaluation:
     """构造最小 JudgeEvaluation（reasoning_trace 声明未命中规则）。"""
     return JudgeEvaluation(
         has_stealth_marketing=decision in ("T0_Block", "T1_Shadowban"),
         is_ai_slop=decision in ("T0_Block", "T2_Normal"),
-        reasoning_trace=(
-            "第一步：无明显引流。第二步：未命中。第三步：判定。"
-        ),
+        reasoning_trace=("第一步：无明显引流。第二步：未命中。第三步：判定。"),
         final_decision=decision,
     )
 
@@ -29,6 +28,7 @@ def _eval(decision: str) -> JudgeEvaluation:
 # ──────────────────────────────────────────────────────────────
 # Raw Agreement
 # ──────────────────────────────────────────────────────────────
+
 
 class TestRawAgreement:
     def test_perfect_agreement(self):
@@ -46,12 +46,13 @@ class TestRawAgreement:
         assert raw_agreement(a, b) == 0.5
 
     def test_empty_input(self):
-        assert raw_agreement([], []) == 0.0
+        assert raw_agreement([], []) is None
 
 
 # ──────────────────────────────────────────────────────────────
 # Cohen's Kappa
 # ──────────────────────────────────────────────────────────────
+
 
 class TestCohensKappa:
     def test_perfect_agreement(self):
@@ -73,12 +74,13 @@ class TestCohensKappa:
         assert 0.2 < kappa < 0.9
 
     def test_empty_input(self):
-        assert cohens_kappa([], []) == 0.0
+        assert cohens_kappa([], []) is None
 
 
 # ──────────────────────────────────────────────────────────────
 # Krippendorff's Alpha
 # ──────────────────────────────────────────────────────────────
+
 
 class TestKrippendorffsAlpha:
     def test_perfect_agreement(self):
@@ -120,12 +122,13 @@ class TestKrippendorffsAlpha:
         assert alpha_near > alpha_far
 
     def test_empty_matrix(self):
-        assert krippendorffs_alpha([]) == 0.0
+        assert krippendorffs_alpha([]) is None
 
 
 # ──────────────────────────────────────────────────────────────
 # compute_batch_iaa
 # ──────────────────────────────────────────────────────────────
+
 
 class TestComputeBatchIAA:
     def test_basic_iaa(self):
@@ -138,7 +141,7 @@ class TestComputeBatchIAA:
         assert "krippendorffs_alpha" in result
         assert result["n_raters"] == 3
         assert result["n_items"] == 3
-        assert isinstance(result["low_confidence"], bool)
+        assert result["low_confidence"] is None
 
     def test_with_none_evals(self):
         judge = [_eval("T0_Block"), None, _eval("T2_Normal")]
@@ -155,5 +158,5 @@ class TestComputeBatchIAA:
         mod = [_eval(d) for d in decisions]
 
         result = compute_batch_iaa(judge, [mod])
-        assert result["low_confidence"] is False
+        assert result["low_confidence"] is None
         assert result["avg_cohens_kappa"] > 0.8

@@ -9,10 +9,12 @@ import random
 import time
 from decimal import Decimal
 from pathlib import Path
+from uuid import uuid4
 
 from pydantic import BaseModel
 
 from ecoalign_forge.runtime.journal import Journal, connect, transaction
+from ecoalign_forge.runtime.prompts import BatchContractError
 from ecoalign_forge.schemas.kernel import GenerationResult, RunConfig, canonical
 
 
@@ -115,7 +117,14 @@ def budget_snapshot(journal: Journal):
     estimated = Decimal(0)
     reserved = Decimal(0)
     unknown = 0
+    reported_usage = dict(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+    usage_attempts = 0
     for attempt in journal.attempts():
+        if attempt["usage"]:
+            usage_attempts += 1
+            for key, value in json.loads(attempt["usage"]).items():
+                if key in reported_usage:
+                    reported_usage[key] += value
         if attempt["cost"] is None:
             reserved += Decimal(attempt["reservation"])
             unknown += 1
@@ -128,6 +137,8 @@ def budget_snapshot(journal: Journal):
         attempts=len(journal.attempts()),
         attempts_without_usage_or_settlement=unknown,
         actual_billed_usd=None,
+        supplier_reported_usage=reported_usage if usage_attempts else None,
+        attempts_with_usage=usage_attempts,
     )
 
 
@@ -294,8 +305,10 @@ class RequestController:
             ):
                 raise RunPausedError("budget_exhausted")
             number = len(self.journal.attempts(request_id)) + 1
-            lease_id = f"{self.journal.get('manifest')['run_id']}:{request_id}:{number}"
+            lease_id = f"{self.journal.get('manifest')['run_id']}:{request_id}:{number}:{uuid4()}"
+            self.journal.hook("before_request_intent", {"request_id": request_id})
             await self.quota.acquire(lease_id, tokens, self.deadline)
+            self.journal.hook("quota_acquired", {"request_id": request_id})
             # No await between budget check and committed reservation. One event-loop owner per run.
             # Recheck after waiting for the shared quota: other coroutines may have reserved funds.
             spent = Decimal(budget_snapshot(self.journal)["total_committed_usd"])
@@ -316,6 +329,7 @@ class RequestController:
                     result = await self.transport(payload, aid, self.config)
                 if result.attempt_id != aid:
                     raise RequestFailedError("Transport returned a different attempt identity")
+                self.journal.hook("before_response_commit", {"attempt_id": aid})
                 self.journal.save_response(aid, result)
                 value = self._parse(stage, result, parser)
                 if value is not None:
@@ -358,7 +372,7 @@ class RequestController:
             self.journal.finish_attempt(
                 result.attempt_id,
                 "parse_failed",
-                error=type(exc).__name__,
+                error=str(exc) if isinstance(exc, BatchContractError) else type(exc).__name__,
                 cost=self.cost(stage, result),
                 usage=result.usage,
             )

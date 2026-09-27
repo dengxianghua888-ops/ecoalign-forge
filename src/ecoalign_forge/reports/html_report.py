@@ -249,22 +249,13 @@ def _render_rule_coverage(coverage: dict[str, int]) -> str:
 
 
 def _render_iaa_section(metrics: dict) -> str:
-    kappa = metrics.get("avg_cohens_kappa", 0)
-    alpha = metrics.get("krippendorffs_alpha", 0)
-    low_conf = metrics.get("low_confidence", False)
+    def display(key):
+        value = metrics.get(key)
+        return f"{value:.3f}" if value is not None else "不可估计"
 
-    kappa_color = "green" if kappa > 0.6 else "yellow" if kappa > 0.4 else "red"
-    alpha_color = "green" if alpha > 0.667 else "yellow" if alpha > 0.4 else "red"
-
-    return f"""<div class="section">
-<h2>模型间一致性 (IAA)</h2>
-<p>这里只描述模型是否同意，不表示哪一个判决正确。</p>
-<div class="kpi-grid">
-<div class="kpi-card"><div class="kpi-value" style="color:{"#509863" if kappa_color == "green" else "#d4b45b" if kappa_color == "yellow" else "#d25d5a"}">{kappa:.3f}</div><div class="kpi-label">Cohen's Kappa (平均)</div></div>
-<div class="kpi-card"><div class="kpi-value" style="color:{"#509863" if alpha_color == "green" else "#d4b45b" if alpha_color == "yellow" else "#d25d5a"}">{alpha:.3f}</div><div class="kpi-label">Krippendorff's Alpha</div></div>
-<div class="kpi-card"><div class="kpi-value">{"低一致性" if low_conf else "未触发低一致性提示"}</div><div class="kpi-label">一致性提示（非正确率）</div></div>
-</div>
-</div>"""
+    return f"""<div class="section"><h2>候选分歧诊断</h2>
+<p>Cohen's Kappa: {display("avg_cohens_kappa")} · Krippendorff's Alpha: {display("krippendorffs_alpha")}</p>
+<p>故意偏置的候选不是独立标注者；一致性不代表判决正确，不用于质量筛选。</p></div>"""
 
 
 def _render_flywheel_section(summary: dict) -> str:

@@ -28,6 +28,13 @@ mode = st.sidebar.selectbox(
     ["live", "demo", "mock", "unknown"],
     format_func=lambda x: "历史数据 (unknown)" if x == "unknown" else x,
 )
+storage = st.sidebar.radio("存储格式", ["新内核运行", "历史 A / unknown（只读）"])
+if storage == "新内核运行":
+    from dashboard.kernel_view import render_kernel
+
+    render_kernel(mode)
+    st.stop()
+
 snap = load_snapshot(mode)
 
 # ━━ Sidebar ━━
@@ -95,7 +102,7 @@ st.markdown(
 <div style="text-align:center;padding:30px 0 12px">
     <div class="divider"></div>
     <div style="font-family:'Noto Sans SC','JetBrains Mono',monospace;color:rgba(255,255,255,.12);font-size:.6rem;letter-spacing:2px;line-height:1.8">
-        EcoAlign-Forge v0.2.1a1 · 多智能体对齐数据合成工厂<br/>
+        EcoAlign-Forge v0.3.0a1 · 多智能体对齐数据合成工厂<br/>
         混沌生成器 → 审核官 → 终审法官 → DPO 训练对<br/>
         © 2026 Apache 2.0
     </div>

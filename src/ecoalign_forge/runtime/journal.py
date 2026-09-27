@@ -19,7 +19,18 @@ SCHEMA_VERSION = 2
 def connect(path: Path) -> sqlite3.Connection:
     db = sqlite3.connect(path, timeout=10, isolation_level=None)
     db.row_factory = sqlite3.Row
-    db.execute("PRAGMA journal_mode=WAL")
+    # Simultaneous first opens can raise SQLITE_BUSY during the WAL mode transition
+    # even with busy_timeout. Retry only that initialization race, with a bound.
+    deadline = time.monotonic() + 10
+    while True:
+        try:
+            db.execute("PRAGMA journal_mode=WAL")
+            break
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc) or time.monotonic() >= deadline:
+                db.close()
+                raise
+            time.sleep(0.02)
     db.execute("PRAGMA synchronous=FULL")
     db.execute("PRAGMA foreign_keys=ON")
     db.execute("PRAGMA busy_timeout=10000")
@@ -60,6 +71,16 @@ class RunBusyError(RuntimeError):
 
 
 class Journal:
+    @classmethod
+    def readonly(cls, path):
+        obj = cls.__new__(cls)
+        obj.path = Path(path)
+        obj.db = sqlite3.connect(
+            (obj.path / "run.sqlite3").resolve().as_uri() + "?mode=ro", uri=True
+        )
+        obj.db.row_factory = sqlite3.Row
+        return obj
+
     def __init__(self, path: Path, *, hook: Callable | None = None):
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
@@ -360,6 +381,43 @@ class Journal:
             pairs_sha256=hashlib.sha256(content.encode()).hexdigest(),
             verification="deterministic_policy_consistency_not_ground_truth",
         )
+        from ecoalign_forge.export.sharegpt_format import to_sharegpt_dict
+        from ecoalign_forge.export.trl_format import dataset_card, to_trl_dict
+        from ecoalign_forge.schemas.kernel import PreferencePair
+
+        parsed = [PreferencePair.model_validate(p) for p in pairs]
+        contents = {
+            "trl_standard.jsonl": "".join(canonical(to_trl_dict(p)) + "\n" for p in parsed),
+            "trl_conversational.jsonl": "".join(
+                canonical(to_trl_dict(p, conversational=True)) + "\n" for p in parsed
+            ),
+            "train_sharegpt.json": canonical([to_sharegpt_dict(p) for p in parsed]) + "\n",
+            "dataset_info.json": canonical(
+                {
+                    "ecoalign_forge_dpo": {
+                        "file_name": "train_sharegpt.json",
+                        "formatting": "sharegpt",
+                        "ranking": True,
+                        "columns": {
+                            "messages": "conversations",
+                            "chosen": "chosen",
+                            "rejected": "rejected",
+                        },
+                    }
+                }
+            )
+            + "\n",
+            "policy.json": canonical(manifest["policy"]) + "\n",
+            "README.md": dataset_card(payload),
+        }
+        payload["files"] = {"pairs.jsonl": payload["pairs_sha256"]}
+        for name, value in contents.items():
+            path = destination / name
+            if path.exists() and path.read_text() != value:
+                raise ValueError("Immutable export view conflict: " + name)
+            if not path.exists():
+                atomic_write(path, value)
+            payload["files"][name] = hashlib.sha256(value.encode()).hexdigest()
         artifact = destination / "manifest.json"
         if artifact.exists() and json.loads(artifact.read_text()) != payload:
             raise ValueError("Immutable export manifest conflict")

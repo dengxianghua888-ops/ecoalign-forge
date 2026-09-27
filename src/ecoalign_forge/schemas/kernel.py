@@ -14,7 +14,7 @@ from ecoalign_forge.schemas.execution import ExecutionMode
 
 
 class Contract(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
 
 def canonical(value: object) -> str:
@@ -113,10 +113,22 @@ class Price(Contract):
     max_input_tokens: int = Field(default=32768, ge=1)
 
 
+class FrozenDict(dict):
+    """A JSON-serializable mapping whose contents cannot change after validation."""
+
+    def _immutable(self, *args, **kwargs):
+        raise TypeError("RunConfig mappings are immutable")
+
+    __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = __ior__ = _immutable
+
+    def __deepcopy__(self, memo):
+        return self
+
+
 class RunConfig(Contract):
     schema_version: Literal[2] = 2
     execution_mode: ExecutionMode = ExecutionMode.DEMO
-    num_samples: int = Field(default=5, ge=1, le=10000)
+    num_samples: int = Field(default=5, ge=1, le=10000, strict=True)
     batch_size: int = Field(default=5, ge=1, le=100)
     max_concurrent: int = Field(default=5, ge=1, le=50)
     rpm: int = Field(default=60, ge=1)
@@ -169,6 +181,8 @@ class RunConfig(Contract):
                 raise ValueError("live execution requires explicit max_run_cost")
             if any(m.model not in self.prices for m in self.models.values()):
                 raise ValueError("live execution requires a price snapshot for every model")
+        object.__setattr__(self, "models", FrozenDict(self.models))
+        object.__setattr__(self, "prices", FrozenDict(self.prices))
         return self
 
 

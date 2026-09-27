@@ -166,3 +166,154 @@ def test_configuration_precedence_and_required_live_prices(tmp_path):
     )
     assert c.max_concurrent == 2
     assert resolve_config(path=p, environ={"ECOALIGN_MAX_CONCURRENT": "1"}).max_concurrent == 3
+
+
+@pytest.mark.asyncio
+async def test_rpm_tpm_reservations_and_deadline(tmp_path):
+    import time
+
+    c = RunConfig(rpm=2, tpm=3, max_concurrent=2)
+    q = Quota(tmp_path, c)
+    await q.acquire("one", 2, time.time() + 1)
+    q.release("one")
+    with pytest.raises(RunPausedError, match="deadline"):
+        await q.acquire("two", 2, time.time() + 0.08)
+    await q.acquire("three", 1, time.time() + 1)
+    q.release("three")
+    with pytest.raises(RunPausedError):
+        await q.acquire("four", 0, time.time() + 0.08)
+    q.close()
+
+
+def test_two_process_shared_quota(tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    script = """
+import asyncio,json,time,sys,os
+from pathlib import Path
+from ecoalign_forge.runtime.control import Quota
+from ecoalign_forge.schemas.kernel import RunConfig
+root=Path(sys.argv[1]);name=sys.argv[2]
+async def main():
+ q=Quota(root,RunConfig(max_concurrent=2,rpm=100,tpm=100))
+ async def one(i):
+  aid=name+str(i)
+  await q.acquire(aid,1,time.time()+10)
+  with (root/'peaks.jsonl').open('a') as f: f.write(json.dumps([time.time(),1])+'\\n')
+  await asyncio.sleep(.04)
+  with (root/'peaks.jsonl').open('a') as f: f.write(json.dumps([time.time(),-1])+'\\n')
+  q.release(aid)
+ await asyncio.gather(*(one(i) for i in range(4)))
+ q.close()
+asyncio.run(main())
+"""
+    procs = [
+        subprocess.Popen(
+            [sys.executable, "-c", script, str(tmp_path), str(i)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for i in range(2)
+    ]
+    for p in procs:
+        _, err = p.communicate(timeout=15)
+        assert p.returncode == 0, err
+    active = peak = 0
+    events = sorted(
+        json.loads(line) for line in (tmp_path / "peaks.jsonl").read_text().splitlines()
+    )
+    assert len(events) == 16
+    for _, change in events:
+        active += change
+        peak = max(peak, active)
+    assert peak == 2 and active == 0
+
+
+@pytest.mark.asyncio
+async def test_stream_usage_only_and_interruption(monkeypatch):
+    from types import SimpleNamespace
+
+    import litellm
+
+    from ecoalign_forge.runtime.control import LiteLLMTransport
+
+    cfg = RunConfig(
+        execution_mode="live",
+        max_run_cost=1,
+        prices={
+            m.model: dict(input_per_million=1, output_per_million=2)
+            for m in RunConfig().models.values()
+        },
+    )
+
+    async def stream():
+        yield SimpleNamespace(
+            model="returned",
+            id="provider-id",
+            choices=[SimpleNamespace(delta=SimpleNamespace(content="{}"), finish_reason="stop")],
+            usage=None,
+        )
+        yield SimpleNamespace(
+            model="returned",
+            id="provider-id",
+            choices=[],
+            usage=dict(prompt_tokens=8, completion_tokens=2, total_tokens=10),
+        )
+
+    async def complete(**kwargs):
+        assert kwargs["num_retries"] == 0 and not kwargs["drop_params"]
+        return stream()
+
+    monkeypatch.setattr(litellm, "acompletion", complete)
+    r = await LiteLLMTransport()(dict(stage="judge", messages=[]), "q:1", cfg)
+    assert (
+        r.usage["total_tokens"] == 10
+        and r.model == "returned"
+        and r.provider_request_id == "provider-id"
+    )
+
+    async def broken():
+        yield SimpleNamespace(
+            model="returned",
+            id="provider-id",
+            choices=[SimpleNamespace(delta=SimpleNamespace(content="{"), finish_reason=None)],
+            usage=None,
+        )
+        raise ConnectionError("disconnected")
+
+    async def incomplete(**kwargs):
+        return broken()
+
+    monkeypatch.setattr(litellm, "acompletion", incomplete)
+    with pytest.raises(TransportError, match="unknown"):
+        await LiteLLMTransport()(dict(stage="judge", messages=[]), "q:2", cfg)
+
+
+@pytest.mark.asyncio
+async def test_authentication_exception_not_retried(monkeypatch, tmp_path):
+    import json
+
+    import litellm
+
+    from ecoalign_forge.runtime.control import LiteLLMTransport
+
+    cfg, journal, quota = setup(tmp_path)
+    calls = []
+
+    async def rejected(**kwargs):
+        calls.append(1)
+        raise litellm.AuthenticationError(
+            message="secret must not be journaled", llm_provider="openai", model="fixture"
+        )
+
+    monkeypatch.setattr(litellm, "acompletion", rejected)
+    with pytest.raises(RequestFailedError):
+        await RequestController(journal, quota, cfg, LiteLLMTransport()).call(
+            "q", "judge", [], [], json.loads
+        )
+    assert calls == [1] and "secret" not in str(journal.attempts())
+    quota.close()
+    journal.close()

@@ -12,6 +12,11 @@ from ecoalign_forge.schemas.kernel import (
     canonical,
 )
 
+
+class BatchContractError(ValueError):
+    """Safe, non-content diagnostic for rejected generation batches."""
+
+
 TEMPLATE_VERSION = "kernel-prompts-1"
 
 
@@ -76,7 +81,10 @@ def parse_candidate(raw):
 
 
 def parse_review(raw):
-    return ReviewOutcome.model_validate(strict_json(raw))
+    outcome = ReviewOutcome.model_validate(strict_json(raw))
+    if outcome.status == "skipped":
+        raise ValueError("Only the runtime can skip review")
+    return outcome
 
 
 def generation_parser(plans):
@@ -85,15 +93,20 @@ def generation_parser(plans):
     def parse(raw):
         values = strict_json(raw)
         if not isinstance(values, list):
-            raise ValueError("generation_batch_not_array")
-        items = [GeneratedItem.model_validate(v) for v in values]
+            raise BatchContractError("generation_batch_not_array")
+        try:
+            items = [GeneratedItem.model_validate(v) for v in values]
+        except ValueError as exc:
+            raise BatchContractError(
+                f"generation_fields_invalid:requested={len(requested)},received={len(values)}"
+            ) from exc
         received = [v.request_item_id for v in items]
         if (
             len(received) != len(requested)
             or len(set(received)) != len(received)
             or set(received) != set(requested)
         ):
-            raise ValueError(
+            raise BatchContractError(
                 f"generation_id_mismatch:requested={len(requested)},received={len(received)}"
             )
         by_id = {v.request_item_id: v for v in items}

@@ -1,0 +1,52 @@
+{
+  "policy_id": "community",
+  "version": "2.7",
+  "name": "Community",
+  "language": "en",
+  "dimensions": [
+    {
+      "id": "contact",
+      "description": "Contact",
+      "labels": [
+        "present",
+        "absent"
+      ],
+      "default": "absent",
+      "rows": [
+        {
+          "label": "present",
+          "when": {
+            "op": "rule",
+            "ref": "CONTACT"
+          }
+        }
+      ]
+    }
+  ],
+  "actions": [
+    "allow",
+    "review"
+  ],
+  "rules": [
+    {
+      "id": "CONTACT",
+      "dimension": "contact",
+      "text": "Contact ID present"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "contact",
+      "action": "review",
+      "when": {
+        "op": "label",
+        "ref": "contact",
+        "value": "present"
+      }
+    },
+    {
+      "id": "default",
+      "action": "allow"
+    }
+  ]
+}
