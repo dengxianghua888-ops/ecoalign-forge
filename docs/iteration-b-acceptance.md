@@ -1,5 +1,9 @@
 # Iteration B deterministic acceptance — 0.3.0a1
 
+> Historical record: 0.3.0a1 was withdrawn after the external-miss bypass was found.
+> Its original counts are retained below, not asserted for the corrected gate. See
+> [current status](project-status.md) and PR #15.
+
 Engineering acceptance uses controlled transports and forbids external LLM requests. No training, paid inference or PyPI publication is part of this release. Live mode's accounting is exercised with transport doubles, not real supplier billing.
 
 ## Verified release-candidate gates

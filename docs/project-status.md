@@ -1,0 +1,35 @@
+# Project status
+
+## Current source and releases
+
+The default branch includes the [external-evidence correction in PR #15](https://github.com/dengxianghua888-ops/ecoalign-forge/pull/15).
+External rules cannot claim either `hit` or `miss` when their required material
+is absent. They must remain `unknown`; a candidate is accepted only if the policy
+can resolve its labels and action independently.
+
+| Version | State | Meaning |
+| --- | --- | --- |
+| `0.3.0a2` | B maintenance version; see [Releases](https://github.com/dengxianghua888-ops/ecoalign-forge/releases) for publication | Corrected evidence gate and recorded demo |
+| `0.3.0a1` | Withdrawn pre-release; original tag/assets retained | Its 5-completed / 3-pair demo relied on unverified external misses |
+| `0.2.1a1` | Historical A Alpha | Legacy contracts; not a substitute for the B kernel |
+| `0.4.0a1` | [C preview, PR #16](https://github.com/dengxianghua888-ops/ecoalign-forge/pull/16) | Review workbench; first-user acceptance remains 0/3 |
+
+The corrected built-in demo produces **one completed case/pair and four machine
+abstentions**, `partial_failed` / exit 3. Previous journals and exported bytes are
+not rewritten. Data that relied on an external `miss` needs regeneration/review;
+old engineering acceptance cannot establish that those decisions were valid.
+
+## Scope and remaining work
+
+- F01–F11 retain their original acceptance history. F09's missing-external-material
+  regression is corrected in PR #15; release verification is version-bound.
+- F12's C workbench implementation lives on the preview branch and follows the
+  corrected gate; it is separate from the published B kernel.
+- F13 still needs three actual first-time users to complete source review, correction,
+  next-version export and verification. Agent/browser automation cannot satisfy it.
+- F14 remains open: independent human preference quality, real-model performance,
+  cross-language effectiveness and training benefit have not been demonstrated.
+
+No paid inference or training is required for the engineering demo or tests. The
+project does not publish to PyPI. Current choices and failure history remain in
+the [original finding ledger](review-findings.csv); new work does not reset those IDs.
