@@ -1,10 +1,10 @@
 # EcoAlign-Forge
 
-An experimental, resumable synthesis kernel for rule-based machine preference data.
+An experimental, resumable synthesis kernel and local review workbench for traceable preference data.
 
 [中文](README_zh.md) · [Migration and contracts](docs/iteration-b-migration.md) · [Acceptance](docs/iteration-b-acceptance.md) · [Findings F01–F14](docs/review-findings.csv)
 
-**Alpha 0.3.0a1.** Declarative PolicyPacks define languages, labels, evidence and ordered decisions. The kernel generates cases, stores weak candidates, reviews judge candidates against original text, validates policy consistency, and exports preference pairs with provenance. Acceptance means engineering consistency, **not human ground truth, model accuracy or demonstrated training benefit**.
+**C candidate 0.4.0a1** (published B Alpha: 0.3.0a1). Declarative PolicyPacks define languages, labels, evidence and ordered decisions. The kernel generates cases, stores weak candidates, reviews judge candidates against original text, validates policy consistency, and exports preference pairs with provenance. Acceptance means engineering consistency, **not human ground truth, model accuracy or demonstrated training benefit**.
 
 ## Recorded demo
 
@@ -74,7 +74,16 @@ python -m pip install -e '.[dashboard]'
 python -m streamlit run dashboard/app.py --server.port 8501
 ```
 
-Select mode, actual run, dimension labels or actions. Inspect pauses, counts, errors and budget reservations. Historical A/unknown data is a separate read-only view. Empty or damaged data never becomes random demo data. Connection status is “not tested” until tested; this dashboard does not include C's review workbench.
+Select mode and an actual run, then use **Run → Review → Dataset**. Inspect original text and rule evidence; accept, correct, abstain or exclude with a reason. Revisions are append-only. Build a new dataset version with exact deduplication and family-grouped train/eval splits, verify it and download its report. Historical views remain read-only; empty/damaged data never becomes random demo data. Use this write-capable workbench only in a trusted local environment.
+
+```bash
+python -m ecoalign_forge run --demo --num-samples 5 --persona naive
+python -m ecoalign_forge dataset data/demo/runs/RUN_ID --output-root datasets
+python -m ecoalign_forge verify datasets/demo/curated/DATASET_VERSION
+python -m ecoalign_forge report data/demo/runs/RUN_ID --output-root reports
+```
+
+Default curated export requires accepted human decisions; unreviewed data is an explicit candidate preview. `export` retains the legacy machine view. A run uses **one** configurable persona, not a four-persona ensemble. See [C contracts and migration](docs/iteration-c-migration.md).
 
 ## Verification and scope
 
@@ -85,6 +94,8 @@ python -m hatchling build
 python scripts/accept_iteration_b.py --output /tmp/ecoalign-b
 ```
 
-The [acceptance record](docs/iteration-b-acceptance.md) links version-bound evidence. F07–F11 cover portable contracts, recovery, evidence gates, consumer correctness and budgets. F12–F14 remain open: review workbench, new-user acceptance, real-model/human evaluation and training outcomes. Historic A adapters and files remain readable; [migration notes](docs/iteration-b-migration.md) document changed assertions and compatibility limits.
+The [acceptance record](docs/iteration-b-acceptance.md) links version-bound evidence. F07–F11 cover portable contracts, recovery, evidence gates, consumer correctness and budgets. C implements F12–F13 engineering work. F13 still requires three actual first-time user walkthroughs; [the protocol](docs/first-user-acceptance.md) records that gate separately. F14 real-model quality and training outcomes remain open. Historic A adapters and files remain readable; [migration notes](docs/iteration-b-migration.md) document changed assertions and compatibility limits.
+
+[Contributing](CONTRIBUTING.md) · [Release gates](docs/releasing.md) · [C acceptance](docs/iteration-c-acceptance.md)
 
 Code license: [Apache-2.0](LICENSE).
