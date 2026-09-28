@@ -22,6 +22,7 @@ async def demo(tmp_path):
     j = Journal.readonly(k.last_run_dir)
     cases = j.cases()
     j.close()
+    cases.sort(key=lambda c: read_case(k.last_run_dir, c["id"])["effective_final"] is None)
     return k.last_run_dir, cases
 
 
@@ -49,16 +50,20 @@ async def test_review_versions_change_exports_preserve_machine_and_old_dataset(t
     empty = build_dataset([run], root)
     assert verify_dataset(empty)["pairs"] == 0
     for case in cases:
-        decide(run, case["id"])
+        decide(
+            run,
+            case["id"],
+            "accept" if read_case(run, case["id"])["effective_final"] else "abstain",
+        )
     first = build_dataset([run], root)
-    assert verify_dataset(first)["pairs"] == 3
+    assert verify_dataset(first)["pairs"] == 1
     assert build_dataset([run], root) == first
     old_content = (first / "pairs.jsonl").read_bytes()
     pair = json.loads(old_content.splitlines()[0])
     cid = pair["source_case_id"]
     decide(run, cid, "abstain")
     second = build_dataset([run], root)
-    assert second != first and verify_dataset(second)["pairs"] == 2
+    assert second != first and verify_dataset(second)["pairs"] == 0
     assert (first / "pairs.jsonl").read_bytes() == old_content
     assert (run / "run.sqlite3").read_bytes() == before
     assert read_case(run, cid)["effective_final"] is None
@@ -153,7 +158,7 @@ async def test_export_atomic_failure_retry_and_corruption(tmp_path):
         build_dataset([run], root, config, hook=fail)
     assert not list(root.glob("*/curated/*/manifest.json"))
     path = build_dataset([run], root, config)
-    assert verify_dataset(path)["pairs"] == 3
+    assert verify_dataset(path)["pairs"] == 1
     (path / "train" / "trl_standard.jsonl").write_text("corrupt")
     with pytest.raises(ValueError, match="checksum"):
         verify_dataset(path)
@@ -207,9 +212,9 @@ async def test_report_real_jsonl_hash_counts_and_html_escape(tmp_path):
     path = build_report(run, tmp_path / "reports", dataset=output)
     report = json.loads((path.parent / "report.json").read_text())
     content = (path.parent / "pairs.jsonl").read_text()
-    assert report["reported_pairs"] == len(content.splitlines()) == 3
+    assert report["reported_pairs"] == len(content.splitlines()) == 1
     assert report["pairs_sha256"] == text_hash(content)
-    assert report["machine_counts"]["completed"] == 5
+    assert report["machine_counts"]["completed"] == 1
     assert report["dataset"]["dataset_version"] == output.name
     assert report["pairs_sha256"] in path.read_text()
     assert build_report(run, tmp_path / "reports", dataset=output) == path
@@ -282,7 +287,7 @@ build_dataset([Path(sys.argv[1])],Path(sys.argv[2]),DatasetConfig(include_unrevi
     published = list(root.glob("demo/curated/*/manifest.json"))
     assert len(published) == (1 if boundary == "dataset_published" else 0)
     output = build_dataset([run], root, DatasetConfig(include_unreviewed=True))
-    assert verify_dataset(output)["pairs"] == 3
+    assert verify_dataset(output)["pairs"] == 1
     assert len(list(root.glob("demo/curated/*/manifest.json"))) == 1
 
 

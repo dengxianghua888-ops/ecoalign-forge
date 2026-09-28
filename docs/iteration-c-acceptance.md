@@ -5,6 +5,14 @@ C implements the original F12–F13 scope on top of B's published commit
 `codex/iteration-c`. Engineering checks and three first-user walkthroughs are
 separate gates. **F13 human acceptance is still 0/3; C release readiness is pending.**
 
+## External-evidence correction (PR #15)
+
+The original `4e0a1f4` C candidate and its three-pair evidence predated the fix for
+external rules claiming miss without materials. Those artifacts are superseded
+for gate acceptance; keep them as historical records. The corrected demo yields
+one pair, then zero after human abstention. Tests now review only gate-accepted
+cases and assert that unavailable facts do not become chosen.
+
 ## Engineering evidence
 
 - Real SQLite review revisions: accept/correct/abstain/exclude, parent chain,
@@ -22,13 +30,13 @@ separate gates. **F13 human acceptance is still 0/3; C release readiness is pend
   error state. Actual Chrome ZIP download was extracted and all manifest files verified.
 - Controlled consumer datasets are loaded/template-processed/tokenized/collated with
   the existing separate TRL 1.14.0 and LLaMA-Factory 0.9.5 locked environments.
-- Python 3.11 and 3.12 each pass all 428 applicable regression tests (including
-  17 C tests). Full Ruff, changed-file formatting and scoped mypy also pass.
+- Python 3.11 and 3.12 passed 428 applicable regression tests on the original C candidate;
+  the updated integration is revalidated after the external-evidence correction. Full Ruff, changed-file formatting and scoped mypy also pass.
   Exact tested commits, installed distributions and CI results are bound in the
   candidate evidence bundle; this is separate from release acceptance.
 
 Run `python scripts/accept_iteration_c.py --output PATH` for the deterministic
-walkthrough: five demo cases, three reviewed pairs, then two after an abstention,
+walkthrough: five demo cases (one completed, four abstained), one reviewed pair, then zero after an abstention,
 plus English/Arabic correction and deduplication examples. The fixture reviewer is
 explicitly named `automated-acceptance-fixture`; it is not a real human participant.
 

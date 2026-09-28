@@ -328,6 +328,39 @@ class TestAdaptiveSampler:
 
 
 class TestHTMLReport:
+    @pytest.mark.parametrize(
+        "summary,rounds,pairs",
+        [
+            (None, 0, 0),
+            ({}, 0, 0),
+            ({"total_rounds": 2}, 2, 0),
+            ({"cumulative_dpo_pairs": 17}, 0, 17),
+            ({"total_rounds": 2, "cumulative_dpo_pairs": 17}, 2, 17),
+        ],
+    )
+    def test_flywheel_integer_counts(self, tmp_path, summary, rounds, pairs):
+        from ecoalign_forge.reports.html_report import generate_html_report
+
+        path = generate_html_report(flywheel_summary=summary, output_path=tmp_path / "report.html")
+        content = path.read_text(encoding="utf-8")
+        for value, label in [(rounds, "记录轮次"), (pairs, "累计 DPO 对")]:
+            assert (
+                f'<div class="kpi-value">{value}</div><div class="kpi-label">{label}</div>'
+                in content
+            )
+
+    def test_flywheel_counts_still_escape_html(self, tmp_path):
+        from ecoalign_forge.reports.html_report import generate_html_report
+
+        value = '<script>alert("x")</script>&'
+        path = generate_html_report(
+            flywheel_summary={"total_rounds": value, "cumulative_dpo_pairs": value},
+            output_path=tmp_path / "report.html",
+        )
+        content = path.read_text(encoding="utf-8")
+        assert value not in content
+        assert content.count("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;&amp;") == 2
+
     def test_basic_report(self, tmp_path):
         from ecoalign_forge.reports.html_report import generate_html_report
 

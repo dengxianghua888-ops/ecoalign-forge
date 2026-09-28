@@ -265,8 +265,8 @@ def _render_flywheel_section(summary: dict) -> str:
     return f"""<div class="section">
 <h2>飞轮合成记录</h2>
 <div class="kpi-grid">
-<div class="kpi-card"><div class="kpi-value">{_esc(total_rounds)}</div><div class="kpi-label">记录轮次</div></div>
-<div class="kpi-card"><div class="kpi-value">{_esc(total_pairs)}</div><div class="kpi-label">累计 DPO 对</div></div>
+<div class="kpi-card"><div class="kpi-value">{_esc(str(total_rounds))}</div><div class="kpi-label">记录轮次</div></div>
+<div class="kpi-card"><div class="kpi-value">{_esc(str(total_pairs))}</div><div class="kpi-label">累计 DPO 对</div></div>
 <div class="kpi-card"><div class="kpi-value">未评估</div><div class="kpi-label">模型质量提升</div></div>
 <div class="kpi-card"><div class="kpi-value">未评估</div><div class="kpi-label">训练收敛</div></div>
 </div>

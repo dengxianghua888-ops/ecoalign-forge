@@ -12,7 +12,7 @@ from tests.test_iteration_c_workbench import demo
 
 @pytest.mark.asyncio
 async def test_dashboard_accept_abstain_dataset_and_error(tmp_path, monkeypatch):
-    run, _ = await demo(tmp_path)
+    run, cases = await demo(tmp_path)
     monkeypatch.setattr(settings, "data_dir", tmp_path / "data")
     monkeypatch.setattr(settings, "datasets_dir", tmp_path / "datasets")
     app = AppTest.from_file(
@@ -22,6 +22,7 @@ async def test_dashboard_accept_abstain_dataset_and_error(tmp_path, monkeypatch)
     app.sidebar.selectbox[0].set_value("demo").run()
     assert not app.exception
     app.sidebar.radio[1].set_value("样本复核").run()
+    next(w for w in app.selectbox if w.label == "选择样本").set_value(cases[0]["id"]).run()
     assert not app.exception
     next(w for w in app.text_input if w.label == "复核者名称").set_value("automated AppTest")
     next(w for w in app.text_area if w.label == "复核理由（必填）").set_value(

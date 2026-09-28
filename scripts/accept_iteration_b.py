@@ -28,7 +28,11 @@ async def scenarios(output):
     results = {}
     demo = SynthesisKernel(data_dir=output / "data", datasets_dir=output / "datasets")
     results["builtin_demo"] = await demo.run(builtin_pack(), RunConfig())
-    assert results["builtin_demo"]["counts"]["dpo_pairs"] == 3
+    assert results["builtin_demo"]["status"] == "partial_failed"
+    assert results["builtin_demo"]["exit_code"] == 3
+    assert results["builtin_demo"]["counts"]["dpo_pairs"] == 1
+    assert results["builtin_demo"]["counts"]["completed"] == 1
+    assert results["builtin_demo"]["counts"]["failed"] == 4
     for language, text in [("en", "Contact raven"), ("ar", "تواصل مع رافن 🐦")]:
         data = pack_data()
         data["language"] = language

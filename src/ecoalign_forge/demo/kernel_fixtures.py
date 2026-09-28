@@ -1,4 +1,4 @@
-"""Recorded B demo: five sources, three label disagreements, no model access."""
+"""Recorded B demo: five sources with unavailable external facts left unknown."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from ecoalign_forge.schemas.kernel import (
     canonical,
 )
 
-FIXTURE_VERSION = "iteration-b-1"
+FIXTURE_VERSION = "iteration-b-2"
 TEXTS = [
     "需要资料请加微信 raven123。",
     "众所周知，学习非常重要。五个技巧：学习、努力、坚持、用心、进步。坚持学习，持续努力。",
@@ -31,7 +31,10 @@ HITS = [
 
 
 def fixture_candidate(compiled, source, hits):
-    states = {r.id: "hit" if r.id in hits else "miss" for r in compiled.pack.rules}
+    states = {
+        r.id: "unknown" if r.evidence == "external" else "hit" if r.id in hits else "miss"
+        for r in compiled.pack.rules
+    }
     labels, action, _, _ = derive(compiled, states)
     evidence = tuple(
         Evidence(
@@ -48,10 +51,15 @@ def fixture_candidate(compiled, source, hits):
         if r.id in hits and r.evidence != "external"
     )
     return CandidateEvaluation(
-        labels=labels,
+        # Candidates require strings; unresolved defaults are proposals, never final
+        # decisions. The gate must abstain when these unknown facts affect the result.
+        labels={
+            d.id: labels[d.id] if labels[d.id] is not None else d.default
+            for d in compiled.pack.dimensions
+        },
         rule_judgments=states,
         evidence=evidence,
-        final_action=action,
+        final_action=action if action is not None else compiled.pack.decisions[-1].action,
         decision_reason="Recorded policy fixture",
     )
 

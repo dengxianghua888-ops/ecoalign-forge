@@ -44,7 +44,10 @@ jobs:
           python -m hatchling build
           python -m pip install --force-reinstall --no-deps dist/*.whl
           cd "$(mktemp -d)"
-          ecoalign-forge --demo --num-samples 5
+          # Missing external facts make four recorded cases abstain (exit 3).
+          demo_exit=0
+          ecoalign-forge --demo --num-samples 5 || demo_exit=$?
+          test "$demo_exit" -eq 3
 
       - name: Deterministic success and controlled failure evidence
         run: |

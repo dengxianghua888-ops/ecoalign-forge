@@ -9,13 +9,14 @@ redacted. Participants need Python 3.11/3.12 and macOS/Linux, no model key or bu
 
 1. Check out the exact candidate commit supplied with the acceptance record. Create
    a new venv and run `python -m pip install -e '.[dashboard]'` from the repository root.
-2. Run `python -m ecoalign_forge run --demo --num-samples 5`. Confirm demo, five
-   completed cases and three machine pairs. Record the run ID and any help needed.
+2. Run `python -m ecoalign_forge run --demo --num-samples 5`. Confirm demo, one
+   completed case/pair and four abstentions (`partial_failed`, exit 3). Record the run ID and any help needed.
 3. Run `python -m streamlit run dashboard/app.py --server.port 8501`. Select demo,
    your run and Review. Open a source and identify its rule/evidence span.
-4. Accept one case with your participant ID and a reason. Correct another case
-   after checking rules; if the gate refuses, read the reason and resolve it.
-   Abstain on a third. Confirm the revision history preserves the original.
+4. Accept case 4 (the gate-accepted fixture) with your participant ID and a reason.
+   Correct its evidence/reason after checking rules, preserving external facts as
+   unknown; missing material cannot be resolved by claiming miss. Try accepting a
+   gate-abstained case and confirm refusal, then record a human abstention on it. Confirm the revision history preserves the original.
 5. In Dataset, export the human-reviewed selection. Record counts and exclusions.
    Trace one included pair to source, evidence, review and policy. A zero-pair
    result is valid if your reviewed cases have no preference disagreement.

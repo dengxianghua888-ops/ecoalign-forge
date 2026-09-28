@@ -40,6 +40,8 @@ def pack_data():
 def candidate(compiled, source, hits):
     states = {r.id: "hit" if r.id in hits else "miss" for r in compiled.pack.rules}
     labels, action, _, _ = derive(compiled, states)
+    # Keep proposed labels/actions, but do not claim to have observed external facts.
+    states.update({r.id: "unknown" for r in compiled.pack.rules if r.evidence == "external"})
     evidence = tuple(
         Evidence(
             rule_id=r.id,
@@ -116,7 +118,12 @@ def test_builtin_matrix_all_actions(a, b, expected):
         outcome = validate_final(
             c, source, ev.model_copy(update={"final_action": action}), "passed"
         )
-        assert (outcome.status == "accepted") == (action == expected)
+        if a and b:
+            assert (outcome.status == "accepted") == (action == expected)
+        else:
+            assert outcome.status == "abstain"
+            assert outcome.reasons == ("unknown_affects_decision",)
+            assert outcome.final is None
 
 
 def test_thresholds_exception_and_recommendation():
@@ -130,7 +137,10 @@ def test_thresholds_exception_and_recommendation():
         ({"FIRSTHAND", "DENSE", "AI-ASSISTED", "B-003"}, "T3_Recommend"),
     ]:
         ev = candidate(c, source, hits)
-        assert validate_final(c, source, ev, "passed").final.evaluation.final_action == action
+        assert ev.final_action == action
+        result = validate_final(c, source, ev, "passed")
+        assert result.status == "abstain"
+        assert result.reasons == ("unknown_affects_decision",)
     assert candidate(c, source, {"B-001", "B-005"}).labels["ai_slop"] == "clear"
     assert candidate(c, source, {"B-001", "B-005", "B-006"}).labels["ai_slop"] == "hit"
 
@@ -142,10 +152,50 @@ def test_unknown_is_not_miss_and_scope_requires_review():
     ev = ev.model_copy(update={"rule_judgments": dict(ev.rule_judgments, **{"A-001": "unknown"})})
     assert validate_final(c, source, ev, "passed").status == "abstain"
     assert (
-        validate_final(c, source, candidate(c, source, {"B-003"}), "skipped").status == "excluded"
+        validate_final(c, source, candidate(c, source, {"A-001", "B-003"}), "skipped").status
+        == "excluded"
     )
-    external = candidate(c, source, {"A-005"})
-    assert validate_final(c, source, external, "passed").status == "abstain"
+
+
+@pytest.mark.parametrize("rule_id", ["A-005", "B-004", "CONTACT"])
+@pytest.mark.parametrize("state", ["hit", "miss"])
+@pytest.mark.parametrize("review_status", ["passed", "corrected", "skipped"])
+def test_external_definitive_results_abstain(rule_id, state, review_status):
+    data = pack_data()
+    data["rules"][0]["evidence"] = "external"
+    pack = PolicyPack.model_validate(data) if rule_id == "CONTACT" else builtin_pack()
+    c = compile_policy(pack)
+    source = SourceText(source_id="1", content="Only the current document is available")
+    ev = candidate(c, source, set())
+    states = dict(ev.rule_judgments)
+    states.update({r.id: "unknown" for r in pack.rules if r.evidence == "external"})
+    states[rule_id] = state
+    result = validate_final(
+        c, source, ev.model_copy(update={"rule_judgments": states}), review_status
+    )
+    assert result.status == "abstain"
+    assert result.reasons == (f"external_material_unavailable:{rule_id}",)
+    assert result.final is None
+
+
+def test_external_unknown_abstains_when_needed_but_allows_independent_decision():
+    c = compile_policy(builtin_pack())
+    source = SourceText(source_id="1", content="A document with recorded rule assessments")
+    for hits, expected in [(set(), "abstain"), ({"A-001", "B-003"}, "accepted")]:
+        ev = candidate(c, source, hits)
+        states = dict(ev.rule_judgments)
+        states.update({r.id: "unknown" for r in c.pack.rules if r.evidence == "external"})
+        result = validate_final(
+            c, source, ev.model_copy(update={"rule_judgments": states}), "passed"
+        )
+        assert result.status == expected
+        if expected == "abstain":
+            assert result.reasons == ("unknown_affects_decision",)
+            assert result.final is None
+        else:
+            assert result.final.evaluation.final_action == "T0_Block"
+            assert result.final.evaluation.rule_judgments["A-005"] == "unknown"
+            assert result.final.evaluation.rule_judgments["B-004"] == "unknown"
 
 
 @pytest.mark.parametrize("mutation", ["duplicate", "reference", "label", "default", "code"])

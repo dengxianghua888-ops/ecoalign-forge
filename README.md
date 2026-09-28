@@ -22,7 +22,7 @@ python -m ecoalign_forge --demo --num-samples 5
 python examples/quickstart.py
 ```
 
-Five recorded fixtures produce five completed cases and three preference pairs, with zero external model requests. Demo/mock record null actual models. Default CLI mode is demo. To install a release without cloning, download its verified wheel from [GitHub Releases](https://github.com/dengxianghua888-ops/ecoalign-forge/releases), then `python -m pip install /path/to/downloaded.whl`. No PyPI release is implied.
+Five recorded fixtures produce one completed case and one preference pair; four cases abstain because external facts are unavailable. The demo reports `partial_failed` (exit code 3), with zero external model requests. Demo/mock record null actual models. Default CLI mode is demo. To install a release without cloning, download its verified wheel from [GitHub Releases](https://github.com/dengxianghua888-ops/ecoalign-forge/releases), then `python -m pip install /path/to/downloaded.whl`. No PyPI release is implied.
 
 ## Rules, execution and recovery
 

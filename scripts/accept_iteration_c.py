@@ -45,19 +45,19 @@ async def scenarios(output):
     result = await k.run(builtin_pack(), RunConfig())
     run = Path(result["run_dir"])
     for view in snapshot_run(run)["cases"]:
-        decision(run, view)
+        decision(run, view, "accept" if view["effective_final"] else "abstain")
     first = build_dataset([run], output / "datasets")
-    assert verify_dataset(first)["pairs"] == 3
+    assert verify_dataset(first)["pairs"] == 1
     before = (first / "pairs.jsonl").read_bytes()
     cid = json.loads(before.splitlines()[0])["source_case_id"]
     view = next(v for v in snapshot_run(run)["cases"] if v["case"]["id"] == cid)
     decision(run, view, "abstain")
     second = build_dataset([run], output / "datasets")
-    assert verify_dataset(second)["pairs"] == 2
+    assert verify_dataset(second)["pairs"] == 0
     assert (first / "pairs.jsonl").read_bytes() == before
     report = build_report(run, output / "reports", dataset=second)
     recorded = json.loads((report.parent / "report.json").read_text())
-    assert recorded["reported_pairs"] == 2
+    assert recorded["reported_pairs"] == 0
     assert recorded["pairs_sha256"] == text_hash((second / "pairs.jsonl").read_text())
     # Unreviewed copy for actual browser interaction, independent of automated reviews.
     interactive = await k.run(builtin_pack(), RunConfig())

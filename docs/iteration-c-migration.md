@@ -2,6 +2,10 @@
 
 `0.4.0a1` is the C candidate. The published B checkpoint/data formats remain readable.
 No historical journal, machine stage, pair or dataset is automatically migrated.
+The external-evidence correction rejects both hit and miss without materials. Old
+exports that relied on an external miss can fail current verification; preserve
+them as historical data and regenerate/review with the corrected gate. The built-in
+demo now produces one pair and four machine abstentions (exit 3), not three pairs.
 Resume still requires the original code fingerprint; finish a B run with B before
 reviewing it in C. Run inspection and review use a read-only connection to B data.
 
