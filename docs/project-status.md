@@ -9,7 +9,7 @@ can resolve its labels and action independently.
 
 | Version | State | Meaning |
 | --- | --- | --- |
-| `0.3.0a2` | B maintenance version; see [Releases](https://github.com/dengxianghua888-ops/ecoalign-forge/releases) for publication | Corrected evidence gate and recorded demo |
+| `0.3.0a2` | [Published maintenance Alpha](https://github.com/dengxianghua888-ops/ecoalign-forge/releases/tag/v0.3.0a2) | Corrected evidence gate and recorded demo |
 | `0.3.0a1` | Withdrawn pre-release; original tag/assets retained | Its 5-completed / 3-pair demo relied on unverified external misses |
 | `0.2.1a1` | Historical A Alpha | Legacy contracts; not a substitute for the B kernel |
 | `0.4.0a1` | [C preview, PR #16](https://github.com/dengxianghua888-ops/ecoalign-forge/pull/16) | Review workbench; first-user acceptance remains 0/3 |
@@ -33,3 +33,5 @@ old engineering acceptance cannot establish that those decisions were valid.
 No paid inference or training is required for the engineering demo or tests. The
 project does not publish to PyPI. Current choices and failure history remain in
 the [original finding ledger](review-findings.csv); new work does not reset those IDs.
+
+The `v0.3.0a2` tag is bound to `26760ca62d9560f9b072ede635831a9ee36ec6b5`. Its wheel, sdist and sanitized evidence were downloaded again after publication; all `SHA256SUMS` entries and fixture manifest hashes matched. See [maintenance acceptance](iteration-b-acceptance.md).

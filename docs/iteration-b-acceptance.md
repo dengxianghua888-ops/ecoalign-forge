@@ -1,4 +1,16 @@
-# Iteration B deterministic acceptance — 0.3.0a1
+# Iteration B maintenance acceptance — 0.3.0a2
+
+[Published Alpha and evidence](https://github.com/dengxianghua888-ops/ecoalign-forge/releases/tag/v0.3.0a2) bind commit `26760ca62d9560f9b072ede635831a9ee36ec6b5`.
+
+- Python 3.11/3.12: 440 regressions each; all four [main CI jobs](https://github.com/dengxianghua888-ops/ecoalign-forge/actions/runs/36439234355) pass.
+- Missing external material now rejects both definitive hit and miss. The built-in 5-case demo produces 1 completion/pair and 4 abstentions (exit 3). Earlier counts below are historical.
+- Exact-commit acceptance includes built-in, English and Arabic exports; 16 recovery and 32 budget/quota tests; separate TRL 1.14.0 and LLaMA-Factory 0.9.5 loading/template/tokenizer/collator checks.
+- Clean Python 3.12 wheel and Python 3.11 sdist-rebuilt wheel run, inspect, resume and export outside the checkout with LLM transport blocked. Resume creates no new attempts or duplicate pair. Both wheel files are identical.
+- Browser interaction confirms actual run selection, 1 accepted pair / 4 failed cases, action chart and unknown-request pause with request ID.
+- Published assets were downloaded again: wheel, sdist and evidence ZIP match SHA256SUMS; package versions, tag target, evidence commit and fixture manifest hashes agree.
+- No real-model quality, training benefit or human-first-use claim is implied. C remains draft with 0/3 first-time users.
+
+## Historical 0.3.0a1 record
 
 > Historical record: 0.3.0a1 was withdrawn after the external-miss bypass was found.
 > Its original counts are retained below, not asserted for the corrected gate. See
