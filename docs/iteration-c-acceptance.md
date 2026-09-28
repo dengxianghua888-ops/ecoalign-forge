@@ -22,8 +22,10 @@ separate gates. **F13 human acceptance is still 0/3; C release readiness is pend
   error state. Actual Chrome ZIP download was extracted and all manifest files verified.
 - Controlled consumer datasets are loaded/template-processed/tokenized/collated with
   the existing separate TRL 1.14.0 and LLaMA-Factory 0.9.5 locked environments.
-- Python 3.11/3.12 regression, full Ruff, changed formatting and scoped mypy checks
-  are recorded with their exact final commit in the candidate evidence bundle.
+- Python 3.11 and 3.12 each pass all 428 applicable regression tests (including
+  17 C tests). Full Ruff, changed-file formatting and scoped mypy also pass.
+  Exact tested commits, installed distributions and CI results are bound in the
+  candidate evidence bundle; this is separate from release acceptance.
 
 Run `python scripts/accept_iteration_c.py --output PATH` for the deterministic
 walkthrough: five demo cases, three reviewed pairs, then two after an abstention,
