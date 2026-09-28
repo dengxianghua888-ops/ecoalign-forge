@@ -17,6 +17,7 @@ os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 from tests.test_iteration_b_kernel import RecordedTransport
 from tests.test_iteration_b_policy import pack_data
 
+from ecoalign_forge import __version__
 from ecoalign_forge.engine.kernel import SynthesisKernel, code_identity
 from ecoalign_forge.policy.builtin import builtin_pack
 from ecoalign_forge.policy.models import PolicyPack
@@ -121,7 +122,7 @@ def main():
         for p in manifest_paths
     }
     summary = dict(
-        version="0.3.0a1",
+        version=__version__,
         code=code_identity(),
         scenarios=results,
         gates=gates,
