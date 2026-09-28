@@ -26,9 +26,11 @@ class RecordedTransport:
         corrupt_stage=None,
         call_log=None,
         hits=None,
+        rule_judgments=None,
     ):
         self.compiled = compile_policy(pack)
         self.hits = hits or {"CONTACT"}
+        self.rule_judgments = rule_judgments or {}
         self.text = text
         self.reviewer = reviewer
         self.corrupt_stage = corrupt_stage
@@ -54,6 +56,9 @@ class RecordedTransport:
         else:
             source = SourceText.model_validate(data["source"])
             ev = fixture_candidate(self.compiled, source, self.hits)
+            ev = ev.model_copy(
+                update={"rule_judgments": {**ev.rule_judgments, **self.rule_judgments}}
+            )
             if stage == "moderator":
                 ev = ev.model_copy(
                     update={
@@ -88,18 +93,25 @@ def kernel(tmp_path, transport=None, hook=None):
 async def test_demo_real_readback_and_repeated_resume(tmp_path):
     k = kernel(tmp_path)
     result = await k.run(builtin_pack(), RunConfig())
-    assert result["status"] == "completed"
-    assert result["counts"]["completed"] == 5 and result["counts"]["dpo_pairs"] == 3
-    assert result["counts"]["no_signal"] == 2
+    assert result["status"] == "partial_failed" and result["exit_code"] == 3
+    assert result["counts"]["completed"] == 1 and result["counts"]["dpo_pairs"] == 1
+    assert result["counts"]["failed"] == 4 and result["counts"]["no_signal"] == 0
     assert result["review_stats"]["skipped"] == 5
     assert result["review_stats"]["consistency_rate"] is None
     path = Path(result["output_path"])
     before = path.read_bytes()
     pairs = [json.loads(line) for line in path.read_text().splitlines()]
     with_j = Journal(k.last_run_dir)
+    for case in with_j.cases():
+        gate = with_j.stage(case["id"], "gate")
+        if gate["status"] == "abstain":
+            assert gate["reasons"] == ["unknown_affects_decision"]
+            assert gate["final"] is None
     for pair in pairs:
         gate = with_j.stage(pair["source_case_id"], "gate")
         assert json.loads(pair["chosen"]) == gate["final"]["evaluation"]
+        assert json.loads(pair["chosen"])["rule_judgments"]["A-005"] == "unknown"
+        assert json.loads(pair["chosen"])["rule_judgments"]["B-004"] == "unknown"
         assert all(
             r["returned_model"] is None
             for values in pair["lineage"]["request_responses"].values()
@@ -289,7 +301,10 @@ async def test_builtin_and_custom_same_source_full_export(tmp_path):
     text = "联系微信 raven / Contact raven"
     observed = []
     for index, (pack, hits) in enumerate(
-        [(builtin_pack(), {"A-001"}), (PolicyPack.model_validate(pack_data()), {"CONTACT"})]
+        [
+            (builtin_pack(), {"A-001", "B-003"}),
+            (PolicyPack.model_validate(pack_data()), {"CONTACT"}),
+        ]
     ):
         transport = RecordedTransport(pack, text=text, hits=hits)
         k = kernel(tmp_path / str(index), transport)
@@ -302,4 +317,42 @@ async def test_builtin_and_custom_same_source_full_export(tmp_path):
         review = next(body for stage, _, body in transport.calls if stage == "reviewer")
         assert review["input"]["source"]["content"] == text
         assert review["policy_hash"] == pair["lineage"]["policy_hash"]
-    assert observed == ["T1_Shadowban", "review"]
+    assert observed == ["T0_Block", "review"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rule_id", ["A-005", "B-004"])
+@pytest.mark.parametrize("review_status", ["passed", "corrected"])
+async def test_external_miss_cannot_reach_export(tmp_path, rule_id, review_status):
+    pack = builtin_pack()
+
+    def review(ev):
+        return dict(
+            status=review_status,
+            reason="Controlled review cannot supply external material",
+            corrected=ev.model_dump(mode="json") if review_status == "corrected" else None,
+        )
+
+    k = kernel(
+        tmp_path,
+        RecordedTransport(
+            pack,
+            hits={"A-001", "B-003"},
+            rule_judgments={rule_id: "miss"},
+            reviewer=review,
+        ),
+    )
+    result = await k.run(pack, RunConfig(execution_mode="mock", num_samples=1))
+    assert result["status"] == "failed" and result["exit_code"] == 1
+    assert result["counts"]["failed"] == 1
+    assert result["counts"]["accepted_cases"] == result["counts"]["dpo_pairs"] == 0
+    assert Path(result["output_path"]).read_bytes() == b""
+    journal = Journal(k.last_run_dir)
+    try:
+        gate = journal.stage(journal.cases()[0]["id"], "gate")
+        assert gate["status"] == "abstain"
+        assert gate["reasons"] == [f"external_material_unavailable:{rule_id}"]
+        assert gate["final"] is None
+        assert journal.pairs() == []
+    finally:
+        journal.close()

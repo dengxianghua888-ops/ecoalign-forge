@@ -205,7 +205,8 @@ def validate_final(
             if review_status not in {"passed", "corrected"}:
                 reasons.append(f"document_scope_unreviewed:{ev.rule_id}")
     for rid, state in candidate.rule_judgments.items():
-        if rules[rid].evidence == "external" and state == "hit":
+        # Neither presence nor absence can be established without external material.
+        if rules[rid].evidence == "external" and state != "unknown":
             return GateResult(status="abstain", reasons=(f"external_material_unavailable:{rid}",))
         if state == "hit" and rid not in evidence_by_rule:
             reasons.append(f"missing_evidence:{rid}")
