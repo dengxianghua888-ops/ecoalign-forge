@@ -1,4 +1,6 @@
-# 0.4.0a1 — C candidate (not yet released)
+# Changelog
+
+## 0.4.0a1 — C candidate (not yet released)
 
 - Append-only local human review, optimistic revisions and gated corrections; original machine runs stay unchanged.
 - Curated immutable datasets with exact deduplication, conflict exclusion, family groups, train/eval partitions and verified source/review lineage.
@@ -6,7 +8,15 @@
 - Explicit single-persona CLI choice, scoped mypy checks and contributor/release/new-user protocols.
 - F13 requires three real first-user walkthroughs before C release readiness. Model quality and training remain unverified.
 
-# 0.3.0a1 — portable, resumable synthesis
+
+## 0.3.0a2 — external-evidence correction
+
+- Refuse both hit and miss for unavailable external materials; preserve unknown facts.
+- Correct the built-in recorded demo: one completed case/pair, four abstentions, exit 3.
+- Retain original 0.3.0a1 tags and evidence as withdrawn historical artifacts.
+- Clarify current versus preview APIs, legacy examples, contribution and release scope.
+
+## 0.3.0a1 — portable, resumable synthesis
 
 - Versioned declarative PolicyPack and source-bound candidate/final contracts; arbitrary label vocabularies.
 - SQLite WAL journals, conservative unknown-request pause, explicit resume choices and immutable exports.
@@ -15,7 +25,6 @@
 - Corrected coincidence-based IAA, nullable severity, TRL and ShareGPT consumer views with fixed dependency locks.
 - Run-based dashboard and migration guide. No paid model, training or PyPI acceptance is claimed.
 
-# Changelog
 
 ## 0.2.1a1 — Iteration A Alpha
 

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ecoalign-forge"
 version = "0.4.0a1"
-description = "Multi-Agent framework for content moderation & alignment (RLHF/DPO) data synthesis."
+description = "Policy-driven preference data with source evidence, resumable runs and TRL/ShareGPT exports."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"

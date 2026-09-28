@@ -2,6 +2,8 @@
 
 import streamlit as st
 
+from ecoalign_forge import __version__
+
 # ━━ Page Config (必须是第一个 Streamlit 调用) ━━
 st.set_page_config(
     page_title="EcoAlign-Forge · 内容对齐数据合成工厂",
@@ -98,11 +100,11 @@ render_pipeline_monitor(snap)
 
 # ━━ Footer ━━
 st.markdown(
-    """
+    f"""
 <div style="text-align:center;padding:30px 0 12px">
     <div class="divider"></div>
     <div style="font-family:'Noto Sans SC','JetBrains Mono',monospace;color:rgba(255,255,255,.12);font-size:.6rem;letter-spacing:2px;line-height:1.8">
-        EcoAlign-Forge v0.4.0a1 · 多智能体对齐数据合成工厂<br/>
+        EcoAlign-Forge v{__version__} · 多智能体对齐数据合成工厂<br/>
         混沌生成器 → 审核官 → 终审法官 → DPO 训练对<br/>
         © 2026 Apache 2.0
     </div>
