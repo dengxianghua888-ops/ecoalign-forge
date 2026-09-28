@@ -11,7 +11,8 @@ from ecoalign_forge.policy.builtin import builtin_pack
 from ecoalign_forge.schemas.kernel import RunConfig
 
 result = asyncio.run(SynthesisKernel().run(builtin_pack(), RunConfig()))
-assert result['exit_code'] == 0
+assert result['exit_code'] == 3  # Four cases abstain without external evidence.
+assert result['counts']['dpo_pairs'] == 1
 ```
 
 Parameters resolve from explicit arguments, JSON configuration, `ECOALIGN_<FIELD>` environment variables, then defaults. Nested model and price mappings are complete mappings, not partial merges. `models` defines generator, moderator, judge and reviewer with model, temperature, max_tokens and optional reasoning_effort. Provider credentials remain environment-only. Historical `CHAOS_CREATOR_MODEL`, `JUDGE_MODEL`, `DEFAULT_*` and `PARSE_*` configure only old adapters; use `ECOALIGN_MODELS` or JSON for the new kernel.
@@ -30,7 +31,9 @@ PolicyPack schema version 1 declares arbitrary language, dimension labels, actio
 
 Legacy PolicyInput adapts only the packaged Chinese A/B handbook. Its descriptive fields cannot replace rules. The built-in pack encodes weighted thresholds, matrix, firsthand AI-assistance exception and T3 admission. Generation focus is an intention, never gold truth.
 
-All stages bind the same policy hash. The weak Moderator's full-rule visibility is a fixed configuration; the judge, source reviewer and chosen prompt use the full snapshot. Evidence uses exact Unicode code-point offsets, original text SHA-256 and source ID. No normalization is hidden. Whole-document evidence requires source review; missing external evidence cannot support a positive assertion. Gate acceptance establishes structure, source references and policy consistency, **not semantic truth**.
+All stages bind the same policy hash. The weak Moderator's full-rule visibility is a fixed configuration; the judge, source reviewer and chosen prompt use the full snapshot. Evidence uses exact Unicode code-point offsets, original text SHA-256 and source ID. No normalization is hidden. Whole-document evidence requires source review. External material is not currently supplied: external rules must remain `unknown`; either `hit` or `miss` makes the gate abstain. Unknowns only permit acceptance when all labels and the decision can be determined independently. Gate acceptance establishes structure, source references and policy consistency, **not semantic truth**.
+
+The corrected `iteration-b-2` demo therefore yields one completed case/pair and four failed cases with `unknown_affects_decision`, returning `partial_failed` / exit 3. Earlier three-pair demo results relied on unverified external misses and are historical, not evidence for the corrected gate.
 
 ## Journals, recovery and statuses
 

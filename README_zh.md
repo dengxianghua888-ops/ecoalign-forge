@@ -18,7 +18,7 @@ python -m ecoalign_forge run --demo --num-samples 5
 python examples/quickstart.py
 ```
 
-5 条预录案例完成，产生 3 对 DPO，无外部模型调用。兼容 `--demo --num-samples 5`，默认模式现在为 demo。wheel 可从 GitHub Alpha 附件下载并安装；本轮不发布 PyPI。
+5 条预录案例中，1 条完成并产生 1 对 DPO，4 条因外部证据不可用而弃权，状态为 `partial_failed`（退出码 3），无外部模型调用。兼容 `--demo --num-samples 5`，默认模式现在为 demo。wheel 可从 GitHub Alpha 附件下载并安装；本轮不发布 PyPI。
 
 ## 新流程
 
