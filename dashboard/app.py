@@ -10,11 +10,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ━━ Autorefresh ━━
-from streamlit_autorefresh import st_autorefresh
-
-st_autorefresh(interval=5000, limit=None, key="dashboard_autorefresh")
-
 # ━━ Theme ━━
 from dashboard.components.theme import inject_css
 
@@ -34,6 +29,11 @@ if storage == "新内核运行":
 
     render_kernel(mode)
     st.stop()
+
+# Historical monitoring is read-only; only this surface may refresh automatically.
+from streamlit_autorefresh import st_autorefresh
+
+st_autorefresh(interval=5000, limit=None, key="dashboard_autorefresh")
 
 snap = load_snapshot(mode)
 
@@ -102,7 +102,7 @@ st.markdown(
 <div style="text-align:center;padding:30px 0 12px">
     <div class="divider"></div>
     <div style="font-family:'Noto Sans SC','JetBrains Mono',monospace;color:rgba(255,255,255,.12);font-size:.6rem;letter-spacing:2px;line-height:1.8">
-        EcoAlign-Forge v0.3.0a1 · 多智能体对齐数据合成工厂<br/>
+        EcoAlign-Forge v0.4.0a1 · 多智能体对齐数据合成工厂<br/>
         混沌生成器 → 审核官 → 终审法官 → DPO 训练对<br/>
         © 2026 Apache 2.0
     </div>
