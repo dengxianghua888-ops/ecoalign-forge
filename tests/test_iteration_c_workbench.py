@@ -329,3 +329,109 @@ async def test_mock_resume_cannot_fall_through_to_real_provider(tmp_path):
     await k.run(pack, RunConfig(execution_mode="mock", num_samples=1))
     with pytest.raises(ValueError, match="explicit fixture transport"):
         await SynthesisKernel().resume(k.last_run_dir)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("selection", "candidate_preview"),
+        ("exclusion_reasons", {"fabricated": 42}),
+        ("source_runs", []),
+        ("execution_mode", "live"),
+        ("language", "fabricated"),
+        ("data_license", "fabricated"),
+        ("selected_cases", 42),
+        ("unique_texts", 42),
+        ("reviewed_cases", 42),
+        ("verification", "independent_gold"),
+        ("deduplication", "none"),
+        ("grouping", "none"),
+        ("files", {}),
+    ],
+)
+async def test_manifest_audit_tampering_is_rejected(tmp_path, field, value):
+    run, cases = await demo(tmp_path)
+    decide(run, cases[0]["id"])
+    output = build_dataset([run], tmp_path / "out")
+    manifest_path = output / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest[field] != value
+    manifest[field] = value
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="audit"):
+        verify_dataset(output)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["status", "counts", "budget"])
+async def test_run_audit_change_creates_new_immutable_version(tmp_path, monkeypatch, field):
+    from ecoalign_forge.workbench import dataset
+
+    run, _ = await demo(tmp_path)
+    root = tmp_path / "out"
+    first = build_dataset([run], root)
+    before = {str(p.relative_to(first)): p.read_bytes() for p in first.rglob("*") if p.is_file()}
+    snapshot_run = dataset.snapshot_run
+
+    def changed_snapshot(path):
+        snapshot = snapshot_run(path)
+        summary = snapshot["summary"]
+        if field == "status":
+            summary[field] = "paused"
+        elif field == "counts":
+            summary[field]["moderated"] += 1
+        else:
+            summary[field]["estimated_usd"] = "1.25"
+        return snapshot
+
+    monkeypatch.setattr(dataset, "snapshot_run", changed_snapshot)
+    second = build_dataset([run], root)
+    assert second != first
+    assert build_dataset([run], root) == second
+    assert verify_dataset(second)["source_runs"] != verify_dataset(first)["source_runs"]
+    assert (second / "sources.jsonl").read_bytes() == before["sources.jsonl"]
+    assert {
+        str(p.relative_to(first)): p.read_bytes() for p in first.rglob("*") if p.is_file()
+    } == before
+
+
+@pytest.mark.asyncio
+async def test_legacy_unbound_audit_requires_rebuild_without_modifying_export(tmp_path):
+    from ecoalign_forge.schemas.kernel import digest
+
+    run, _ = await demo(tmp_path)
+    root = tmp_path / "out"
+    output = build_dataset([run], root)
+    manifest_path = output / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["schema_version"] = 3
+    del manifest["recipe"]["audit_hash"]
+    manifest["dataset_version"] = digest(manifest["recipe"])
+    manifest_path.write_text(json.dumps(manifest))
+    legacy = output.with_name(manifest["dataset_version"])
+    output.rename(legacy)
+    before = (legacy / "manifest.json").read_bytes()
+    with pytest.raises(ValueError, match=r"Legacy.*rebuild"):
+        verify_dataset(legacy)
+    rebuilt = build_dataset([run], root)
+    assert rebuilt != legacy
+    assert verify_dataset(rebuilt)["schema_version"] == 4
+    assert (legacy / "manifest.json").read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_run_audit_order_is_independent_of_local_paths(tmp_path):
+    import shutil
+
+    first_run, _ = await demo(tmp_path / "first")
+    second_run, _ = await demo(tmp_path / "second")
+    root = tmp_path / "out"
+    first = build_dataset([first_run, second_run], root)
+    copies = [tmp_path / "relocated" / name for name in ("z", "a")]
+    for source, destination in zip(sorted([first_run, second_run]), copies, strict=True):
+        shutil.copytree(source, destination)
+    assert build_dataset(copies, root) == first
+    assert build_dataset(list(reversed(copies)), root) == first
+    runs = verify_dataset(first)["source_runs"]
+    assert [run["run_id"] for run in runs] == sorted(run["run_id"] for run in runs)

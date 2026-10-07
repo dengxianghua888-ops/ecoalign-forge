@@ -30,7 +30,13 @@ from ecoalign_forge.schemas.kernel import (
 )
 from ecoalign_forge.workbench.review import snapshot_run
 
-BUILDER_VERSION = "curated-dataset-1"
+BUILDER_VERSION = "curated-dataset-2"
+
+
+def _audit_hash(manifest):
+    # Exclude only the recipe and its digest to avoid a circular hash. All audit
+    # metadata and exported file checksums must participate in version identity.
+    return digest({k: v for k, v in manifest.items() if k not in {"recipe", "dataset_version"}})
 
 
 class DatasetConfig(Contract):
@@ -164,7 +170,7 @@ def build_dataset(
     paths = sorted({Path(p).resolve() for p in run_dirs})
     if not paths:
         raise ValueError("Select at least one run")
-    snapshots = [snapshot_run(p) for p in paths]
+    snapshots = sorted((snapshot_run(p) for p in paths), key=lambda s: s["manifest"]["run_id"])
     manifests = [s["manifest"] for s in snapshots]
     if len({m["run_id"] for m in manifests}) != len(manifests):
         raise ValueError("Duplicate run identity")
@@ -277,10 +283,8 @@ def build_dataset(
         source_records_hash=digest(records),
         pairs_hash=digest([p.model_dump(mode="json") for p in pairs]),
     )
-    version = digest(recipe)
     payload = dict(
-        schema_version=3,
-        dataset_version=version,
+        schema_version=4,
         recipe=recipe,
         execution_mode=mode,
         policy_hash=manifests[0]["policy_hash"],
@@ -353,6 +357,9 @@ def build_dataset(
     )
     payload["pairs_sha256"] = text_hash(contents["pairs.jsonl"])
     payload["files"] = {name: text_hash(content) for name, content in contents.items()}
+    recipe["audit_hash"] = _audit_hash(payload)
+    version = digest(recipe)
+    payload["dataset_version"] = version
     contents["manifest.json"] = canonical(payload) + "\n"
     root = Path(output_root) / mode / "curated"
     root.mkdir(parents=True, exist_ok=True)
@@ -392,10 +399,16 @@ def verify_dataset(path: Path) -> dict:
     """Fail closed on corrupt files, counts, split leaks and broken source/review links."""
     path = Path(path)
     manifest = json.loads((path / "manifest.json").read_text())
-    if manifest.get("schema_version") != 3:
+    if manifest.get("schema_version") == 3:
+        raise ValueError(
+            "Legacy curated dataset has unbound audit metadata; rebuild from source runs"
+        )
+    if manifest.get("schema_version") != 4:
         raise ValueError("Expected a C curated dataset manifest")
     if digest(manifest["recipe"]) != manifest["dataset_version"]:
         raise ValueError("Dataset recipe hash mismatch")
+    if _audit_hash(manifest) != manifest["recipe"].get("audit_hash"):
+        raise ValueError("Dataset audit hash mismatch")
     for name, expected in manifest["files"].items():
         file = path / name
         if file.is_symlink() or not file.resolve().is_relative_to(path.resolve()):

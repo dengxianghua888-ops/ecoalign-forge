@@ -83,6 +83,23 @@ license and SHA-256. TRL standard/conversational and ShareGPT preserve chosen or
 Root consumer files contain **all** pairs: use partition subdirectories for training.
 Data license defaults to unspecified, independently of the Apache-2.0 code license.
 
+Curated manifest schema 4 (`curated-dataset-2`) binds every manifest field other
+than the recipe and dataset version into the recipe's `audit_hash`, including
+selection, exclusion reasons, source-run status/counts/budget and file checksums.
+Identical snapshots and configuration reproduce the same version; a changed run
+audit summary creates a new version even when the selected pairs are unchanged.
+Run ordering is canonical by run ID, independently of input order or local paths.
+
+Schema 3 curated exports did not bind all audit metadata. Verification now rejects
+them explicitly rather than certifying unprotected fields. Preserve old directories
+as historical artifacts and rerun the dataset command against the original source
+runs and desired selection/configuration to create a schema 4 version. This does
+not modify old exports, journals or reviews; it captures the current source/review
+snapshot, which may differ from the historical one. Without the original source
+runs, unbound historical audit values cannot be retroactively verified. These
+hashes detect changes relative to a recorded version; they are not signatures or
+independent proof of source truth.
+
 A version publishes via one directory rename after verification. A crash before
 publication exposes no dataset; after publication a retry verifies the existing
 version. Incomplete directories under `.curated-staging/` are not published or
