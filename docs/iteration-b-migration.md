@@ -1,4 +1,4 @@
-# Iteration B migration (0.3.0a1)
+# Iteration B migration (0.3.0a2)
 
 ## Entry points and configuration
 
