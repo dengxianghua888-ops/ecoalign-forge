@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
+from ecoalign_forge.runtime.accounting import decimal_add
 from ecoalign_forge.runtime.journal import Journal, connect, transaction
 from ecoalign_forge.runtime.prompts import BatchContractError
 from ecoalign_forge.schemas.kernel import GenerationResult, RunConfig, canonical
@@ -114,32 +115,7 @@ class Quota:
 
 
 def budget_snapshot(journal: Journal):
-    estimated = Decimal(0)
-    reserved = Decimal(0)
-    unknown = 0
-    reported_usage = dict(prompt_tokens=0, completion_tokens=0, total_tokens=0)
-    usage_attempts = 0
-    for attempt in journal.attempts():
-        if attempt["usage"]:
-            usage_attempts += 1
-            for key, value in json.loads(attempt["usage"]).items():
-                if key in reported_usage:
-                    reported_usage[key] += value
-        if attempt["cost"] is None:
-            reserved += Decimal(attempt["reservation"])
-            unknown += 1
-        else:
-            estimated += Decimal(attempt["cost"])
-    return dict(
-        estimated_usd=str(estimated),
-        unresolved_reserved_usd=str(reserved),
-        total_committed_usd=str(estimated + reserved),
-        attempts=len(journal.attempts()),
-        attempts_without_usage_or_settlement=unknown,
-        actual_billed_usd=None,
-        supplier_reported_usage=reported_usage if usage_attempts else None,
-        attempts_with_usage=usage_attempts,
-    )
+    return journal.budget_snapshot()
 
 
 class LiteLLMTransport:
@@ -301,7 +277,7 @@ class RequestController:
             spent = Decimal(budget_snapshot(self.journal)["total_committed_usd"])
             if (
                 self.config.max_run_cost is not None
-                and spent + reservation > self.config.max_run_cost
+                and decimal_add(spent, reservation) > self.config.max_run_cost
             ):
                 raise RunPausedError("budget_exhausted")
             number = len(self.journal.attempts(request_id)) + 1
@@ -314,7 +290,7 @@ class RequestController:
             spent = Decimal(budget_snapshot(self.journal)["total_committed_usd"])
             if (
                 self.config.max_run_cost is not None
-                and spent + reservation > self.config.max_run_cost
+                and decimal_add(spent, reservation) > self.config.max_run_cost
             ):
                 self.quota.release(lease_id)
                 raise RunPausedError("budget_exhausted")

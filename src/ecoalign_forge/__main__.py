@@ -29,6 +29,11 @@ def main() -> None:
             command.add_argument("run_dir", type=Path)
         if command.prog.endswith("resume"):
             command.add_argument(
+                "--allow-environment-change",
+                action="store_true",
+                help="Explicitly accept and audit changed Python/dependency versions during resume",
+            )
+            command.add_argument(
                 "--resolve", action="append", default=[], metavar="ATTEMPT_ID=retry|skip"
             )
             command.add_argument("--max-run-cost", type=Decimal)
@@ -76,6 +81,7 @@ def main() -> None:
                     unknown_decisions=choices,
                     max_run_cost=args.max_run_cost,
                     extend_seconds=args.extend_seconds,
+                    allow_environment_change=args.allow_environment_change,
                 )
             )
         else:

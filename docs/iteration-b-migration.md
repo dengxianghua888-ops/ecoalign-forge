@@ -50,6 +50,16 @@ python -m ecoalign_forge export data/demo/runs/RUN_ID
 
 Inspect lists unknown attempt IDs. Unknown remote outcomes pause by default. Retry creates a new attempt and retains the old unresolved reservation; skip records an explicit exclusion from further attempts and marks the affected case failed. Saved complete responses are parsed locally first. Only increased budgets and extended deadlines are allowed; code fingerprint, prompt version, models, policy and schema must match. Resume restores the original data and dataset roots from its checkpoint; changing the shared quota root is refused.
 
+Budget checks read a constant-size, transactionally maintained Decimal projection. Attempts remain authoritative: old journals rebuild this projection once from cost/reservation/usage columns, and legacy writer changes invalidate it. Raw responses are not loaded for budget checks. Unknown attempts retain their reservation after either retry or skip; settlement and its projection commit or roll back together.
+
+New run manifests also record the Python implementation/version, SQLite version and key runtime distribution versions (request SDK, validation and tokenization included). Resume compares the effective environment before dispatch and lists changed fields. Restore the recorded environment or start a new run to retain strict reproducibility. If you deliberately accept an environment change, use:
+
+```bash
+python -m ecoalign_forge resume data/demo/runs/RUN_ID --allow-environment-change
+```
+
+The equivalent Python option is `allow_environment_change=True`. This records previous/current identities and the differences in a `resume_environment_revision` event, preserves the original manifest, and makes the accepted identity effective for later resumes. It does not waive code/template/policy checks, prove compatibility, or upgrade old source checkpoints. A missing environment identity is unknown, so it also requires explicit acceptance when all other identity checks pass. This is a targeted runtime fingerprint, not a complete transitive dependency lock or a guarantee against editable dependency changes.
+
 Counts rebuild from committed state:
 
 ```
