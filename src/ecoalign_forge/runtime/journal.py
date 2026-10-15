@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from ecoalign_forge.runtime.accounting import BUDGET_KEY, adjust_budget, empty_budget
 from ecoalign_forge.schemas.kernel import KernelCounts, canonical, digest
 
 SCHEMA_VERSION = 2
@@ -75,6 +76,7 @@ class Journal:
     def readonly(cls, path):
         obj = cls.__new__(cls)
         obj.path = Path(path)
+        obj._readonly = True
         obj.db = sqlite3.connect(
             (obj.path / "run.sqlite3").resolve().as_uri() + "?mode=ro", uri=True
         )
@@ -83,6 +85,7 @@ class Journal:
 
     def __init__(self, path: Path, *, hook: Callable | None = None):
         self.path = Path(path)
+        self._readonly = False
         self.path.mkdir(parents=True, exist_ok=True)
         self.hook = hook or (lambda *_: None)
         self.db = connect(self.path / "run.sqlite3")
@@ -107,6 +110,18 @@ class Journal:
             self.close()
             raise ValueError("Unsupported checkpoint schema version")
         self.set("schema_version", SCHEMA_VERSION)
+        # Invalidate the projection even if an older writer or a maintenance tool
+        # changes authoritative rows. Current writes refresh it in the same transaction.
+        self.db.executescript(f"""
+            CREATE TRIGGER IF NOT EXISTS budget_insert AFTER INSERT ON attempts
+            BEGIN DELETE FROM meta WHERE key='{BUDGET_KEY}'; END;
+            CREATE TRIGGER IF NOT EXISTS budget_update AFTER UPDATE OF cost,reservation,usage ON attempts
+            BEGIN DELETE FROM meta WHERE key='{BUDGET_KEY}'; END;
+            CREATE TRIGGER IF NOT EXISTS budget_delete AFTER DELETE ON attempts
+            BEGIN DELETE FROM meta WHERE key='{BUDGET_KEY}'; END;
+        """)
+        with transaction(self.db):
+            self.budget_snapshot()
 
     def close(self):
         self.db.close()
@@ -240,8 +255,24 @@ class Journal:
         )
         return [dict(r) for r in self.db.execute(query, (request_id,) if request_id else ())]
 
+    def budget_snapshot(self):
+        totals = self.get(BUDGET_KEY)
+        if totals is None:
+            if not self._readonly and not self.db.in_transaction:
+                with transaction(self.db):
+                    return self.budget_snapshot()
+            # One narrow scan for legacy/invalidated journals. No result blobs,
+            # sorting or float coercion; readonly inspection never modifies files.
+            totals = empty_budget()
+            for row in self.db.execute("SELECT cost,reservation,usage FROM attempts"):
+                adjust_budget(totals, row)
+            if not self._readonly:
+                self.set(BUDGET_KEY, totals)
+        return totals
+
     def start_attempt(self, request_id, reservation):
         with transaction(self.db):
+            totals = self.budget_snapshot()
             number = (
                 self.db.execute(
                     "SELECT count(*) FROM attempts WHERE request_id=?", (request_id,)
@@ -253,6 +284,8 @@ class Journal:
                 "INSERT INTO attempts(id,request_id,number,state,reservation,started) VALUES(?,?,?,'in_flight',?,?)",
                 (attempt_id, request_id, number, str(reservation), time.time()),
             )
+            adjust_budget(totals, dict(reservation=str(reservation), cost=None, usage=None))
+            self.set(BUDGET_KEY, totals)
             self.db.execute("UPDATE requests SET state='in_flight' WHERE id=?", (request_id,))
             self.event("request_intent", {"request_id": request_id, "attempt_id": attempt_id})
         self.hook("request_intent_committed", {"request_id": request_id, "attempt_id": attempt_id})
@@ -268,6 +301,21 @@ class Journal:
 
     def finish_attempt(self, attempt_id, state, *, error=None, cost=None, usage=None, parsed=None):
         with transaction(self.db):
+            totals = self.budget_snapshot()
+            previous = self.db.execute(
+                "SELECT cost,reservation,usage,request_id FROM attempts WHERE id=?", (attempt_id,)
+            ).fetchone()
+            if previous is None:
+                raise ValueError("Unknown attempt ID")
+            adjust_budget(totals, previous, -1)
+            adjust_budget(
+                totals,
+                dict(
+                    reservation=previous["reservation"],
+                    cost=str(cost) if cost is not None else None,
+                    usage=canonical(usage) if usage is not None else None,
+                ),
+            )
             self.db.execute(
                 "UPDATE attempts SET state=?,error=?,cost=?,usage=?,ended=? WHERE id=?",
                 (
@@ -279,9 +327,8 @@ class Journal:
                     attempt_id,
                 ),
             )
-            req = self.db.execute(
-                "SELECT request_id FROM attempts WHERE id=?", (attempt_id,)
-            ).fetchone()[0]
+            self.set(BUDGET_KEY, totals)
+            req = previous["request_id"]
             self.db.execute(
                 "UPDATE requests SET state=?,parsed=? WHERE id=?",
                 (state, canonical(parsed) if parsed is not None else None, req),
@@ -305,7 +352,12 @@ class Journal:
                 self.event("interrupted_requests", {"attempt_ids": [r["id"] for r in rows]})
 
     def unknown(self):
-        return [a for a in self.attempts() if a["state"] == "unknown" and a["resolution"] is None]
+        return [
+            dict(row)
+            for row in self.db.execute(
+                "SELECT * FROM attempts WHERE state='unknown' AND resolution IS NULL ORDER BY started,number"
+            )
+        ]
 
     def resolve_unknown(self, choices):
         pending = {a["id"]: a for a in self.unknown()}
