@@ -121,3 +121,54 @@ async def test_cli_explicit_environment_acceptance(tmp_path):
     j = Journal(k.last_run_dir)
     assert j.get("effective_environment") == environment_identity()
     j.close()
+
+
+@pytest.mark.parametrize(
+    "expected,current,message",
+    [
+        ({}, {"dependency": None}, "checkpoint=<missing>, current=None"),
+        ({"dependency": None}, {}, "checkpoint=None, current=<missing>"),
+        ({}, {"dependency": "<missing>"}, "checkpoint=<missing>, current='<missing>'"),
+    ],
+)
+def test_missing_environment_key_is_distinct_from_null(expected, current, message):
+    from ecoalign_forge.runtime.identity import environment_differences
+
+    assert environment_differences(expected, current) == [f"environment.dependency: {message}"]
+    assert environment_differences({"dependency": None}, {"dependency": None}) == []
+
+
+@pytest.mark.asyncio
+async def test_missing_nullable_dependency_requires_explicit_resume_acceptance(
+    tmp_path, monkeypatch
+):
+    current = environment_identity()
+    current["dependencies"]["tokenizers"] = None
+    monkeypatch.setattr("ecoalign_forge.engine.kernel.environment_identity", lambda: current)
+    k = kernel(tmp_path)
+    await k.run(builtin_pack(), RunConfig(num_samples=1))
+    j = Journal(k.last_run_dir)
+    manifest = j.get("manifest")
+    del manifest["environment"]["dependencies"]["tokenizers"]
+    j.set("manifest", manifest)
+    before = j.attempts()
+    j.close()
+    with pytest.raises(
+        ValueError,
+        match=r"environment\.dependencies\.tokenizers: checkpoint=<missing>, current=None",
+    ):
+        await k.resume(k.last_run_dir)
+    j = Journal(k.last_run_dir)
+    assert j.get("effective_environment") is None
+    assert j.attempts() == before
+    j.close()
+    await k.resume(k.last_run_dir, allow_environment_change=True)
+    j = Journal(k.last_run_dir)
+    assert j.get("effective_environment")["dependencies"]["tokenizers"] is None
+    assert "tokenizers" not in j.get("manifest")["environment"]["dependencies"]
+    events = j.db.execute(
+        "SELECT value FROM events WHERE kind='resume_environment_revision'"
+    ).fetchall()
+    assert len(events) == 1 and "checkpoint=<missing>" in json.loads(events[0][0])["differences"][0]
+    assert j.attempts() == before
+    j.close()
