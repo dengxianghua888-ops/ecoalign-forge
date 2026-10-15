@@ -7,6 +7,8 @@ import sqlite3
 import sys
 from importlib import metadata
 
+_MISSING = object()
+
 # Direct runtime requirements plus SDK/validation/tokenization dependencies that
 # can change provider requests, response parsing or token accounting.
 RUNTIME_DISTRIBUTIONS = (
@@ -46,9 +48,13 @@ def environment_differences(expected, current, prefix="environment"):
         differences = []
         for key in sorted(expected.keys() | current.keys()):
             differences.extend(
-                environment_differences(expected.get(key), current.get(key), f"{prefix}.{key}")
+                environment_differences(
+                    expected.get(key, _MISSING), current.get(key, _MISSING), f"{prefix}.{key}"
+                )
             )
         return differences
     if expected == current:
         return []
-    return [f"{prefix}: checkpoint={expected!r}, current={current!r}"]
+    expected_label = "<missing>" if expected is _MISSING else repr(expected)
+    current_label = "<missing>" if current is _MISSING else repr(current)
+    return [f"{prefix}: checkpoint={expected_label}, current={current_label}"]

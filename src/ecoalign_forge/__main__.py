@@ -87,7 +87,11 @@ def main() -> None:
         else:
             if not (args.run_dir / "run.sqlite3").is_file():
                 raise ValueError("No checkpoint at run directory")
-            journal = Journal(args.run_dir)
+            journal = (
+                Journal.readonly(args.run_dir)
+                if args.command == "inspect"
+                else Journal(args.run_dir)
+            )
             try:
                 if args.command == "inspect":
                     result = kernel._snapshot(journal, persist=False)

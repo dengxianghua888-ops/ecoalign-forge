@@ -81,6 +81,10 @@ class Journal:
             (obj.path / "run.sqlite3").resolve().as_uri() + "?mode=ro", uri=True
         )
         obj.db.row_factory = sqlite3.Row
+        version = obj.get("schema_version")
+        if version is not None and version != SCHEMA_VERSION:
+            obj.close()
+            raise ValueError("Unsupported checkpoint schema version")
         return obj
 
     def __init__(self, path: Path, *, hook: Callable | None = None):
