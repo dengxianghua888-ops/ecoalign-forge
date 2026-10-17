@@ -109,3 +109,11 @@ python -m streamlit run dashboard/app.py --server.port 8501
 代码使用 [Apache-2.0](LICENSE)。数据许可未声明时为**未指定**，不自动继承代码许可证。用于训练或评估前，需要按实际任务复核候选数据。
 
 如果项目对你有帮助，欢迎 Star 收藏与支持；接收版本通知请使用 **Watch → Custom → Releases**。
+
+## 离线逐例行为比较
+
+新增 `eval-freeze`、`eval-snapshot` 和 `compare`：冻结评测题目、评分规则与参考标签身份，
+只读比较两份结果，分别解释缺失、弃权（abstain）、失败及标签／证据变化。
+旧运行没有固定评测身份时只展示可核实的内容重叠，不能视为同一评测实验。
+候选标签不会被当成人工准确率，也不会自动给出“质量提升”结论。
+完整命令、样例及边界见[离线比较说明](docs/offline-comparison.md)。

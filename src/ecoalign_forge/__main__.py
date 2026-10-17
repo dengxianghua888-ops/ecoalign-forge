@@ -11,6 +11,15 @@ from pathlib import Path
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ecoalign-forge")
     commands = parser.add_subparsers(dest="command", required=True)
+    freeze = commands.add_parser("eval-freeze", help="Freeze a local evaluation-set JSON to stdout")
+    freeze.add_argument("input", type=Path)
+    snapshot = commands.add_parser("eval-snapshot", help="Read a stopped legacy run to stdout")
+    snapshot.add_argument("run_dir", type=Path)
+    compare = commands.add_parser("compare", help="Offline per-case behavior comparison to stdout")
+    compare.add_argument("evaluation_set", type=Path)
+    compare.add_argument("baseline", type=Path)
+    compare.add_argument("candidate", type=Path)
+    compare.add_argument("--format", choices=["json", "text"], default="json")
     run = commands.add_parser("run")
     run.add_argument("--demo", action="store_true", default=None)
     run.add_argument("--mode", choices=["demo", "live"])
@@ -42,6 +51,37 @@ def main() -> None:
     if not argv or argv[0].startswith("--"):
         argv = ["run", *argv]
     args = parser.parse_args(argv)
+
+    if args.command in {"eval-freeze", "eval-snapshot", "compare"}:
+        from ecoalign_forge.evaluation.compare import (
+            Snapshot,
+            compare,
+            freeze,
+            load_set,
+            read_json,
+            render_text,
+            snapshot_run,
+        )
+
+        try:
+            if args.command == "eval-freeze":
+                result = freeze(read_json(args.input))
+            elif args.command == "eval-snapshot":
+                result = snapshot_run(args.run_dir)
+            else:
+                result = compare(
+                    load_set(read_json(args.evaluation_set)),
+                    Snapshot.model_validate(read_json(args.baseline)),
+                    Snapshot.model_validate(read_json(args.candidate)),
+                )
+        except (ValueError, OSError) as exc:
+            parser.error(str(exc))
+        print(
+            render_text(result)
+            if getattr(args, "format", None) == "text"
+            else json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False)
+        )
+        raise SystemExit(0)
 
     from ecoalign_forge.engine.kernel import SynthesisKernel
     from ecoalign_forge.policy.builtin import builtin_pack
