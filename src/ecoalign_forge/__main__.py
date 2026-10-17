@@ -134,7 +134,15 @@ def main() -> None:
             )
             try:
                 if args.command == "inspect":
-                    result = kernel._snapshot(journal, persist=False)
+                    from ecoalign_forge.runtime.inspection import recovery_report
+
+                    # Both views describe one SQLite read snapshot, even with a live writer.
+                    journal.db.execute("BEGIN")
+                    try:
+                        result = kernel._snapshot(journal, persist=False)
+                        result["recovery"] = recovery_report(journal)
+                    finally:
+                        journal.db.execute("ROLLBACK")
                 else:
                     with journal.owner():
                         result = {

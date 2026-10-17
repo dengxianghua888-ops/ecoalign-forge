@@ -38,6 +38,8 @@ async def test_inspect_cli_preserves_legacy_checkpoint_bytes_and_schema(tmp_path
     assert result.returncode == 0, result.stderr
     snapshot = json.loads(result.stdout[result.stdout.index("{") :])
     assert snapshot["budget"] == original["budget"]
+    assert snapshot["recovery"]["source"] == "persisted_journal_only"
+    assert snapshot["recovery"]["external_exactly_once_guaranteed"] is False
     assert path.read_bytes() == before
     with sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True) as db:
         assert db.execute("SELECT value FROM meta WHERE key=?", (BUDGET_KEY,)).fetchone() is None

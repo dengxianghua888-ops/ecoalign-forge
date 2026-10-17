@@ -120,3 +120,5 @@ If the project helps your work, Star it to save and support it. For release noti
 behavior diagnostics with frozen content/scorer/reference identities.
 Legacy runs remain explicitly unbound; candidate labels are never reported as
 human accuracy. See the [complete CLI example and contracts](docs/offline-comparison.md).
+
+`inspect` now includes per-attempt saved-response, unresolved-reservation and remote-outcome explanations, without model calls or journal migration. [Read the boundaries →](docs/recovery-inspection.md)

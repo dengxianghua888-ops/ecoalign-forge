@@ -117,3 +117,5 @@ python -m streamlit run dashboard/app.py --server.port 8501
 旧运行没有固定评测身份时只展示可核实的内容重叠，不能视为同一评测实验。
 候选标签不会被当成人工准确率，也不会自动给出“质量提升”结论。
 完整命令、样例及边界见[离线比较说明](docs/offline-comparison.md)。
+
+`inspect` 新增逐请求尝试的持久响应、未决预留及远端结果边界解释，不调用模型、不迁移日志。未知远端结果仍不能保证外部调用恰好一次。[只读恢复检查说明 →](docs/recovery-inspection.md)
