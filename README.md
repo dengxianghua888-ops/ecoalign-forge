@@ -113,3 +113,12 @@ Select `demo` and your run to view labels, actions, failed cases and budget rese
 Code is licensed under [Apache-2.0](LICENSE). Dataset licensing is **unspecified** unless declared in the policy; it does not inherit the code license. Candidate data requires task-specific review before use in training or evaluation.
 
 If the project helps your work, Star it to save and support it. For release notifications, use **Watch → Custom → Releases**.
+
+## Offline behavior comparison / 离线行为比较
+
+`eval-freeze`, `eval-snapshot`, and `compare` provide read-only, per-case
+behavior diagnostics with frozen content/scorer/reference identities.
+Legacy runs remain explicitly unbound; candidate labels are never reported as
+human accuracy. See the [complete CLI example and contracts](docs/offline-comparison.md).
+
+`inspect` now includes per-attempt saved-response, unresolved-reservation and remote-outcome explanations, without model calls or journal migration. [Read the boundaries →](docs/recovery-inspection.md)
